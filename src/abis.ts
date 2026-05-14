@@ -69,6 +69,51 @@ export const orbitRegistryAbi = [
     stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }],
     outputs: [{ name: "", type: "bytes32[]" }]
+  },
+  {
+    type: "function",
+    name: "totalPlugins",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "count", type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "getPlugins",
+    stateMutability: "view",
+    inputs: [
+      { name: "offset", type: "uint256" },
+      { name: "limit", type: "uint256" }
+    ],
+    outputs: [
+      {
+        name: "plugins",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "bytes32" },
+          { name: "name", type: "string" },
+          { name: "version", type: "string" },
+          { name: "owner", type: "address" },
+          { name: "slug", type: "string" },
+          { name: "description", type: "string" },
+          { name: "pricePerInstall", type: "uint256" },
+          { name: "pricePerUsage", type: "uint256" },
+          { name: "isActive", type: "bool" },
+          { name: "createdAt", type: "uint256" },
+          { name: "updatedAt", type: "uint256" }
+        ]
+      }
+    ]
+  },
+  {
+    type: "function",
+    name: "getPluginIds",
+    stateMutability: "view",
+    inputs: [
+      { name: "offset", type: "uint256" },
+      { name: "limit", type: "uint256" }
+    ],
+    outputs: [{ name: "ids", type: "bytes32[]" }]
   }
 ] as const;
 

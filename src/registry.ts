@@ -14,6 +14,7 @@ import { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
 import type {
   OrbitPlugin,
   OrbitRegistryClient,
+  PaginatedPluginsResult,
   RegisterPluginInput,
   RegisterPluginReceipt,
   UpdatePluginInput,
@@ -171,6 +172,31 @@ export function createOrbitRegistryClient(
         args: [owner]
       });
       return [...pluginIds];
+    },
+
+    async getPlugins(offset: bigint, limit: bigint): Promise<PaginatedPluginsResult> {
+      const [plugins, total] = await Promise.all([
+        publicClient.readContract({
+          address: config.registryAddress,
+          abi: orbitRegistryAbi,
+          functionName: "getPlugins",
+          args: [offset, limit]
+        }),
+        publicClient.readContract({
+          address: config.registryAddress,
+          abi: orbitRegistryAbi,
+          functionName: "totalPlugins"
+        })
+      ]);
+      return { plugins: [...plugins] as OrbitPlugin[], total };
+    },
+
+    async totalPlugins(): Promise<bigint> {
+      return publicClient.readContract({
+        address: config.registryAddress,
+        abi: orbitRegistryAbi,
+        functionName: "totalPlugins"
+      });
     }
   };
 }
@@ -207,6 +233,14 @@ export function createRegistry(): OrbitRegistryClient {
     async getPluginsByOwner(owner) {
       const client = await getClient();
       return client.getPluginsByOwner(owner);
+    },
+    async getPlugins(offset, limit) {
+      const client = await getClient();
+      return client.getPlugins(offset, limit);
+    },
+    async totalPlugins() {
+      const client = await getClient();
+      return client.totalPlugins();
     }
   };
 }

@@ -51,6 +51,11 @@ export type BillingReceipt = {
   chargedWei: bigint;
 };
 
+export type PaginatedPluginsResult = {
+  plugins: OrbitPlugin[];
+  total: bigint;
+};
+
 export interface OrbitRegistryClient {
   registerPlugin(input: RegisterPluginInput): Promise<RegisterPluginReceipt>;
   updatePlugin(input: UpdatePluginInput): Promise<UpdatePluginReceipt>;
@@ -58,6 +63,8 @@ export interface OrbitRegistryClient {
   getPlugin(pluginId: Hex): Promise<OrbitPlugin>;
   isRegistered(pluginId: Hex): Promise<boolean>;
   getPluginsByOwner(owner: Address): Promise<Hex[]>;
+  getPlugins(offset: bigint, limit: bigint): Promise<PaginatedPluginsResult>;
+  totalPlugins(): Promise<bigint>;
 }
 
 export interface OrbitBillingClient {
