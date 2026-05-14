@@ -1,9 +1,10 @@
 import {
   createPublicClient,
   createWalletClient,
-  encodePacked,
+  encodeAbiParameters,
   http,
   keccak256,
+  parseAbiParameters,
   type Address,
   type Hex
 } from "viem";
@@ -97,7 +98,10 @@ export function createOrbitRegistryClient(
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const pluginId = keccak256(
-        encodePacked(["string", "string", "address"], [input.name, input.version, account.address])
+        encodeAbiParameters(
+          parseAbiParameters("string, string, address"),
+          [input.name, input.version, account.address]
+        )
       );
 
       return {
