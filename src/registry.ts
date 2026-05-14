@@ -54,7 +54,7 @@ async function loadRegistryConfig(): Promise<CreateOrbitRegistryClientConfig> {
 
 function buildChain(config: CreateOrbitRegistryClientConfig) {
   const envChainId = Number(process.env.ORBIT_CHAIN_ID ?? "");
-  const fallbackChainId = Number.isFinite(envChainId) && envChainId > 0 ? envChainId : 16601;
+  const fallbackChainId = Number.isFinite(envChainId) && envChainId > 0 ? envChainId : 16602;
   return {
     id: config.chainId ?? fallbackChainId,
     name: config.chainName ?? process.env.ORBIT_CHAIN_NAME ?? "Orbit",

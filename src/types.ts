@@ -99,10 +99,5 @@ export type OrbitSdk = {
 };
 
 export type CreateOrbitSdkConfig = {
-  rpcUrl?: string;
-  privateKey?: Hex;
-  registryAddress?: Address;
-  billingAddress?: Address;
-  chainId?: number;
-  chainName?: string;
+  privateKey: Hex;
 };
