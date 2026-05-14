@@ -10,7 +10,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { orbitRegistryAbi } from "./abis.js";
-import { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
+import { getEnvOrPrompt } from "./runtime_config.js";
 import type {
   OrbitPlugin,
   OrbitRegistryClient,
@@ -29,10 +29,7 @@ type CreateOrbitRegistryClientConfig = {
 };
 
 async function loadRegistryConfig(): Promise<CreateOrbitRegistryClientConfig> {
-  const rpcUrl = await getAnyEnvOrPrompt({
-    envKeys: ["ORBIT_RPC_URL", "RPC_URL"],
-    promptMessage: "Enter Orbit RPC URL"
-  });
+  const rpcUrl = "https://evmrpc-testnet.0g.ai";
   const privateKey = (await getEnvOrPrompt({
     envKey: "PRIVATE_KEY",
     promptMessage: "Enter private key",
@@ -40,24 +37,16 @@ async function loadRegistryConfig(): Promise<CreateOrbitRegistryClientConfig> {
     validate: (value) =>
       value.startsWith("0x") && value.length === 66 ? true : "Expected 0x + 64 hex chars"
   })) as Hex;
-  const registryAddress = (await getEnvOrPrompt({
-    envKey: "ORBIT_REGISTRY_ADDRESS",
-    promptMessage: "Enter OrbitRegistry address",
-    validate: (value) =>
-      value.startsWith("0x") && value.length === 42 ? true : "Expected 0x + 40 hex chars"
-  })) as Address;
-  const chainIdRaw = (process.env.ORBIT_CHAIN_ID ?? "").trim();
-  const chainId = chainIdRaw ? Number(chainIdRaw) : undefined;
-  const chainName = (process.env.ORBIT_CHAIN_NAME ?? "").trim() || undefined;
+  const registryAddress: Address = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
+  const chainId = 16602;
+  const chainName = "0G Galileo Testnet";
   return { rpcUrl, privateKey, registryAddress, chainId, chainName };
 }
 
 function buildChain(config: CreateOrbitRegistryClientConfig) {
-  const envChainId = Number(process.env.ORBIT_CHAIN_ID ?? "");
-  const fallbackChainId = Number.isFinite(envChainId) && envChainId > 0 ? envChainId : 16602;
   return {
-    id: config.chainId ?? fallbackChainId,
-    name: config.chainName ?? process.env.ORBIT_CHAIN_NAME ?? "Orbit",
+    id: config.chainId ?? 16602,
+    name: config.chainName ?? "0G Galileo Testnet",
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [config.rpcUrl] } }
   };

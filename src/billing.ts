@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { orbitBillingAbi, orbitRegistryAbi } from "./abis.js";
-import { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
+import { getEnvOrPrompt } from "./runtime_config.js";
 import type { BillingReceipt, OrbitBillingClient } from "./types.js";
 
 type CreateOrbitBillingClientConfig = {
@@ -14,10 +14,7 @@ type CreateOrbitBillingClientConfig = {
 };
 
 async function loadBillingConfig(): Promise<CreateOrbitBillingClientConfig> {
-  const rpcUrl = await getAnyEnvOrPrompt({
-    envKeys: ["ORBIT_RPC_URL", "RPC_URL"],
-    promptMessage: "Enter Orbit RPC URL"
-  });
+  const rpcUrl = "https://evmrpc-testnet.0g.ai";
   const privateKey = (await getEnvOrPrompt({
     envKey: "PRIVATE_KEY",
     promptMessage: "Enter private key",
@@ -25,30 +22,17 @@ async function loadBillingConfig(): Promise<CreateOrbitBillingClientConfig> {
     validate: (value) =>
       value.startsWith("0x") && value.length === 66 ? true : "Expected 0x + 64 hex chars"
   })) as Hex;
-  const registryAddress = (await getEnvOrPrompt({
-    envKey: "ORBIT_REGISTRY_ADDRESS",
-    promptMessage: "Enter OrbitRegistry address",
-    validate: (value) =>
-      value.startsWith("0x") && value.length === 42 ? true : "Expected 0x + 40 hex chars"
-  })) as Address;
-  const billingAddress = (await getEnvOrPrompt({
-    envKey: "ORBIT_BILLING_ADDRESS",
-    promptMessage: "Enter OrbitBilling address",
-    validate: (value) =>
-      value.startsWith("0x") && value.length === 42 ? true : "Expected 0x + 40 hex chars"
-  })) as Address;
-  const chainIdRaw = (process.env.ORBIT_CHAIN_ID ?? "").trim();
-  const chainId = chainIdRaw ? Number(chainIdRaw) : undefined;
-  const chainName = (process.env.ORBIT_CHAIN_NAME ?? "").trim() || undefined;
+  const registryAddress: Address = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
+  const billingAddress: Address = "0x34e3fea4cbd6604becc0a87ace8aa831b23f5314";
+  const chainId = 16602;
+  const chainName = "0G Galileo Testnet";
   return { rpcUrl, privateKey, registryAddress, billingAddress, chainId, chainName };
 }
 
 function buildChain(config: CreateOrbitBillingClientConfig) {
-  const envChainId = Number(process.env.ORBIT_CHAIN_ID ?? "");
-  const fallbackChainId = Number.isFinite(envChainId) && envChainId > 0 ? envChainId : 16602;
   return {
-    id: config.chainId ?? fallbackChainId,
-    name: config.chainName ?? process.env.ORBIT_CHAIN_NAME ?? "Orbit",
+    id: config.chainId ?? 16602,
+    name: config.chainName ?? "0G Galileo Testnet",
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [config.rpcUrl] } }
   };
