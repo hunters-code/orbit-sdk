@@ -18,10 +18,9 @@ function requireStorageBaseUrl(): string {
 }
 
 export function createStorage(): OrbitStorageClient {
-  const base = requireStorageBaseUrl();
-
   return {
     async upload(data: PluginContextData): Promise<string> {
+      const base = requireStorageBaseUrl();
       const out = await httpJson<{ hash: string }>(`${base}/put`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -33,6 +32,7 @@ export function createStorage(): OrbitStorageClient {
       return out.hash;
     },
     async download(hash: string): Promise<PluginContextData> {
+      const base = requireStorageBaseUrl();
       return httpJson<PluginContextData>(`${base}/get/${encodeURIComponent(hash)}`, {
         method: "GET",
         headers: { accept: "application/json" }
