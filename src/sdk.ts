@@ -12,15 +12,7 @@ function readAddress(value: string | undefined, envKey: string): `0x${string}` {
   return resolved as `0x${string}`;
 }
 
-function readRequired(value: string | undefined, envKey: string): string {
-  const resolved = (value ?? process.env[envKey] ?? "").trim();
-  if (!resolved) {
-    throw new Error(`Missing ${envKey}`);
-  }
-  return resolved;
-}
-
-export function createOrbitSdk(config?: CreateOrbitSdkConfig): OrbitSdk {
+export function createOrbitSdk(config: CreateOrbitSdkConfig): OrbitSdk {
   if (!config) {
     return {
       registry: createRegistry(),
@@ -30,9 +22,9 @@ export function createOrbitSdk(config?: CreateOrbitSdkConfig): OrbitSdk {
     };
   }
 
-  const registryAddress = readAddress(config.registryAddress, "ORBIT_REGISTRY_ADDRESS");
-  const billingAddress = readAddress(config.billingAddress, "ORBIT_BILLING_ADDRESS");
-  const rpcUrl = readRequired(config.rpcUrl, "ORBIT_RPC_URL");
+  const registryAddress: `0x${string}` = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
+  const billingAddress: `0x${string}` = "0x34e3fea4cbd6604becc0a87ace8aa831b23f5314";
+  const rpcUrl = "https://evmrpc-testnet.0g.ai";
   const privateKey = readAddress(config.privateKey, "PRIVATE_KEY");
 
   return {
@@ -40,18 +32,18 @@ export function createOrbitSdk(config?: CreateOrbitSdkConfig): OrbitSdk {
       rpcUrl,
       privateKey,
       registryAddress,
-      chainId: config.chainId,
-      chainName: config.chainName
+      chainId: 16602,
+      chainName: "0G-Galileo-Testnet"
     }),
     billing: createOrbitBillingClient({
       rpcUrl,
       privateKey,
       registryAddress,
       billingAddress,
-      chainId: config.chainId,
-      chainName: config.chainName
+      chainId: 16602,
+      chainName: "0G-Galileo-Testnet"
     }),
-    storage: createStorage(),
+    get storage() { return createStorage(); },
     publisher: createPublisher()
   };
 }
