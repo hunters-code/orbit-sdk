@@ -9,7 +9,10 @@ import {
   readJson,
   reportPublishCliFailure,
   resolvePluginKey,
+  resolvePluginKeyOptional,
+  resolveRegistryPluginId,
 } from "../src/bin/cli_common.js";
+import type { OrbitRegistryClient } from "../src/types.js";
 
 const validKey = `0x${"e".repeat(64)}`;
 
@@ -33,12 +36,15 @@ describe("parseWei", () => {
 describe("resolvePluginKey", () => {
   const prevPlugin = process.env.PLUGIN_KEY;
   const prevOpenclaw = process.env.OPENCLAW_PLUGIN_KEY;
+  const prevOrbit = process.env.ORBIT_PLUGIN_ID;
 
   afterEach(() => {
     if (prevPlugin === undefined) delete process.env.PLUGIN_KEY;
     else process.env.PLUGIN_KEY = prevPlugin;
     if (prevOpenclaw === undefined) delete process.env.OPENCLAW_PLUGIN_KEY;
     else process.env.OPENCLAW_PLUGIN_KEY = prevOpenclaw;
+    if (prevOrbit === undefined) delete process.env.ORBIT_PLUGIN_ID;
+    else process.env.ORBIT_PLUGIN_ID = prevOrbit;
   });
 
   it("returns PLUGIN_KEY when set", () => {
@@ -60,6 +66,13 @@ describe("resolvePluginKey", () => {
     expect(resolvePluginKey()).toBe(validKey);
   });
 
+  it("falls back to ORBIT_PLUGIN_ID", () => {
+    delete process.env.PLUGIN_KEY;
+    delete process.env.OPENCLAW_PLUGIN_KEY;
+    process.env.ORBIT_PLUGIN_ID = validKey;
+    expect(resolvePluginKey()).toBe(validKey);
+  });
+
   it("throws when missing", () => {
     delete process.env.PLUGIN_KEY;
     delete process.env.OPENCLAW_PLUGIN_KEY;
@@ -69,6 +82,62 @@ describe("resolvePluginKey", () => {
   it("throws when format is invalid", () => {
     process.env.PLUGIN_KEY = "0x1234";
     expect(() => resolvePluginKey()).toThrow(/Invalid PLUGIN_KEY/);
+  });
+});
+
+describe("resolvePluginKeyOptional", () => {
+  const prevPlugin = process.env.PLUGIN_KEY;
+  const prevOpenclaw = process.env.OPENCLAW_PLUGIN_KEY;
+
+  afterEach(() => {
+    if (prevPlugin === undefined) delete process.env.PLUGIN_KEY;
+    else process.env.PLUGIN_KEY = prevPlugin;
+    if (prevOpenclaw === undefined) delete process.env.OPENCLAW_PLUGIN_KEY;
+    else process.env.OPENCLAW_PLUGIN_KEY = prevOpenclaw;
+  });
+
+  it("returns null when unset", () => {
+    delete process.env.PLUGIN_KEY;
+    delete process.env.OPENCLAW_PLUGIN_KEY;
+    expect(resolvePluginKeyOptional()).toBeNull();
+  });
+
+  it("returns key when set", () => {
+    process.env.PLUGIN_KEY = validKey;
+    expect(resolvePluginKeyOptional()).toBe(validKey);
+  });
+});
+
+describe("resolveRegistryPluginId", () => {
+  const prevPlugin = process.env.PLUGIN_KEY;
+  const prevOpenclaw = process.env.OPENCLAW_PLUGIN_KEY;
+  const owner = "0x1111111111111111111111111111111111111111" as const;
+
+  afterEach(() => {
+    if (prevPlugin === undefined) delete process.env.PLUGIN_KEY;
+    else process.env.PLUGIN_KEY = prevPlugin;
+    if (prevOpenclaw === undefined) delete process.env.OPENCLAW_PLUGIN_KEY;
+    else process.env.OPENCLAW_PLUGIN_KEY = prevOpenclaw;
+  });
+
+  it("uses PLUGIN_KEY when set", async () => {
+    process.env.PLUGIN_KEY = validKey;
+    const registry = {
+      getSignerAddress: async () => owner,
+    } as OrbitRegistryClient;
+    const ctx = loadPublishCliContext(
+      (() => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-resolve-"));
+        fs.writeFileSync(
+          path.join(dir, "package.json"),
+          JSON.stringify({ name: "p", version: "1.0.0" }),
+          "utf8",
+        );
+        return dir;
+      })(),
+    );
+    const id = await resolveRegistryPluginId(registry, ctx);
+    expect(id).toBe(validKey);
   });
 });
 

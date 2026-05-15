@@ -2,18 +2,16 @@
 
 import { createPublisher } from "../publisher.js";
 import { createRegistry } from "../registry.js";
+import { persistPluginKeyToEnv } from "../runtime_config.js";
 import {
   loadPublishCliContext,
   reportPublishCliFailure,
-  resolvePluginKey,
+  resolveRegistryPluginId,
 } from "./cli_common.js";
 
 async function main() {
   const cwd = process.cwd();
-  const extra = process.argv.slice(2);
-  const updateMode = extra.includes("--update");
-  const publishArgs = extra.filter((x) => x !== "--update");
-
+  const publishArgs = process.argv.slice(2);
   const publisher = createPublisher();
   const registry = createRegistry();
 
@@ -23,20 +21,24 @@ async function main() {
   });
 
   const ctx = loadPublishCliContext(cwd);
+  const pluginId = await resolveRegistryPluginId(registry, ctx);
+  const registered = await registry.isRegistered(pluginId);
 
-  if (updateMode) {
-    const pluginKey = resolvePluginKey();
+  if (registered) {
     const result = await registry.updatePlugin({
-      pluginId: pluginKey,
+      pluginId,
       slug: ctx.slug,
       description: ctx.description,
     });
+    const envPath = persistPluginKeyToEnv(cwd, pluginId);
     console.log(
       JSON.stringify(
         {
           ok: true,
+          published: true,
           step: "orbit_updatePlugin",
-          pluginKey,
+          pluginId,
+          envPath,
           slug: ctx.slug,
           description: ctx.description,
           txHash: result.txHash,
@@ -46,35 +48,39 @@ async function main() {
         2,
       ),
     );
-  } else {
-    const result = await registry.registerPlugin({
-      name: ctx.displayName,
-      version: ctx.version,
-      slug: ctx.slug,
-      description: ctx.description,
-      pricePerInstall: ctx.pricePerInstall,
-      pricePerUsage: ctx.pricePerUsage,
-    });
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          step: "orbit_registerPlugin",
-          pluginId: result.pluginId,
-          name: ctx.displayName,
-          version: ctx.version,
-          slug: ctx.slug,
-          description: ctx.description,
-          pricePerInstall: ctx.pricePerInstall.toString(),
-          pricePerUsage: ctx.pricePerUsage.toString(),
-          txHash: result.txHash,
-          blockNumber: result.blockNumber.toString(),
-        },
-        null,
-        2,
-      ),
-    );
+    return;
   }
+
+  const result = await registry.registerPlugin({
+    name: ctx.displayName,
+    version: ctx.version,
+    slug: ctx.slug,
+    description: ctx.description,
+    pricePerInstall: ctx.pricePerInstall,
+    pricePerUsage: ctx.pricePerUsage,
+  });
+  const envPath = persistPluginKeyToEnv(cwd, result.pluginId);
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        published: true,
+        step: "orbit_registerPlugin",
+        pluginId: result.pluginId,
+        envPath,
+        name: ctx.displayName,
+        version: ctx.version,
+        slug: ctx.slug,
+        description: ctx.description,
+        pricePerInstall: ctx.pricePerInstall.toString(),
+        pricePerUsage: ctx.pricePerUsage.toString(),
+        txHash: result.txHash,
+        blockNumber: result.blockNumber.toString(),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((err) => {

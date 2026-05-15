@@ -32,6 +32,58 @@ export function resetCwdDotEnvCache(): void {
   cwdDotEnvApplied = false;
 }
 
+function formatDotEnvValue(value: string): string {
+  if (/[\s#"']/.test(value)) {
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return value;
+}
+
+function parseDotEnvLineKey(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const eq = trimmed.indexOf("=");
+  if (eq <= 0) return null;
+  let key = trimmed.slice(0, eq).trim();
+  if (key.startsWith("export ")) key = key.slice(7).trim();
+  return key || null;
+}
+
+export function upsertDotEnvKeys(cwd: string, entries: Record<string, string>): string {
+  const envPath = path.join(cwd, ".env");
+  const lines = fs.existsSync(envPath)
+    ? fs.readFileSync(envPath, "utf8").split(/\n/)
+    : [];
+
+  for (const [key, value] of Object.entries(entries)) {
+    process.env[key] = value;
+    const formatted = `${key}=${formatDotEnvValue(value)}`;
+    let found = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (parseDotEnvLineKey(lines[i]) === key) {
+        lines[i] = formatted;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+      lines.push(formatted);
+    }
+  }
+
+  const content = lines.length > 0 ? `${lines.join("\n")}\n` : "";
+  fs.writeFileSync(envPath, content, "utf8");
+  return envPath;
+}
+
+export function persistPluginKeyToEnv(cwd: string, pluginId: string): string {
+  return upsertDotEnvKeys(cwd, {
+    PLUGIN_KEY: pluginId,
+    ORBIT_PLUGIN_ID: pluginId,
+  });
+}
+
 function applyCwdDotEnv(): void {
   if (cwdDotEnvApplied) return;
   cwdDotEnvApplied = true;

@@ -52,6 +52,16 @@ function buildChain(config: CreateOrbitRegistryClientConfig) {
   };
 }
 
+export function computePluginId(name: string, version: string, owner: Address): Hex {
+  return keccak256(
+    encodeAbiParameters(parseAbiParameters("string, string, address"), [
+      name,
+      version,
+      owner
+    ])
+  );
+}
+
 export function createOrbitRegistryClient(
   config: CreateOrbitRegistryClientConfig
 ): OrbitRegistryClient {
@@ -86,12 +96,7 @@ export function createOrbitRegistryClient(
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const pluginId = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters("string, string, address"),
-          [input.name, input.version, account.address]
-        )
-      );
+      const pluginId = computePluginId(input.name, input.version, account.address);
 
       return {
         txHash,
@@ -160,6 +165,10 @@ export function createOrbitRegistryClient(
         args: [owner]
       });
       return [...pluginIds];
+    },
+
+    async getSignerAddress(): Promise<Address> {
+      return account.address;
     }
   };
 }
@@ -196,6 +205,10 @@ export function createRegistry(): OrbitRegistryClient {
     async getPluginsByOwner(owner) {
       const client = await getClient();
       return client.getPluginsByOwner(owner);
+    },
+    async getSignerAddress() {
+      const client = await getClient();
+      return client.getSignerAddress();
     }
   };
 }

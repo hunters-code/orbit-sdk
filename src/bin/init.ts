@@ -58,7 +58,6 @@ async function main() {
     scripts: {
       typecheck: "tsc --noEmit",
       publish: "orbit-publish",
-      update: "orbit-update",
     },
     openclaw: {
       extensions: ["./index.ts"],
@@ -172,6 +171,7 @@ ORBIT_CHAIN_NAME=
 PRIVATE_KEY=
 ORBIT_REGISTRY_ADDRESS=
 ORBIT_BILLING_ADDRESS=
+PLUGIN_KEY=
 ORBIT_PLUGIN_ID=
 ORBIT_BILLING_RECORD_INSTALL=0
 `;
@@ -196,7 +196,6 @@ dist/
     # edit .env with your credentials
     # edit index.ts to add your tools
     npm run publish
-    # later: npm run update (after PLUGIN_KEY is set)
 `);
 }
 

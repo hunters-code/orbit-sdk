@@ -21,8 +21,7 @@
   "types": "dist/index.d.ts",
   "bin": {
     "orbit-init": "dist/bin/init.js",
-    "orbit-publish": "dist/bin/publish.js",
-    "orbit-update": "dist/bin/update.js"
+    "orbit-publish": "dist/bin/publish.js"
   },
   "files": [
     "dist"

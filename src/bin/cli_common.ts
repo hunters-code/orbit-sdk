@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Hex } from "viem";
+import type { Address, Hex } from "viem";
+import { computePluginId } from "../registry.js";
 import { OrbitPublishError } from "../publisher.js";
+import type { OrbitRegistryClient } from "../types.js";
 
 export type PackageJson = {
   name?: string;
@@ -87,17 +89,42 @@ export function reportPublishCliFailure(err: unknown): void {
   console.error("");
 }
 
-export function resolvePluginKey(): Hex {
-  const v = (
+function readPluginKeyEnv(): string {
+  return (
     process.env.PLUGIN_KEY ??
     process.env.OPENCLAW_PLUGIN_KEY ??
+    process.env.ORBIT_PLUGIN_ID ??
     ""
   ).trim();
-  if (!v) throw new Error("Missing PLUGIN_KEY for plugin update");
-  if (!v.startsWith("0x") || v.length !== 66) {
+}
+
+function parsePluginKeyEnv(raw: string): Hex {
+  if (!raw.startsWith("0x") || raw.length !== 66) {
     throw new Error("Invalid PLUGIN_KEY (expected 0x + 64 hex chars)");
   }
-  return v as Hex;
+  return raw as Hex;
+}
+
+export function resolvePluginKeyOptional(): Hex | null {
+  const v = readPluginKeyEnv();
+  if (!v) return null;
+  return parsePluginKeyEnv(v);
+}
+
+export function resolvePluginKey(): Hex {
+  const v = readPluginKeyEnv();
+  if (!v) throw new Error("Missing PLUGIN_KEY for plugin update");
+  return parsePluginKeyEnv(v);
+}
+
+export async function resolveRegistryPluginId(
+  registry: OrbitRegistryClient,
+  ctx: PublishCliContext,
+): Promise<Hex> {
+  const fromEnv = resolvePluginKeyOptional();
+  if (fromEnv) return fromEnv;
+  const owner = await registry.getSignerAddress();
+  return computePluginId(ctx.displayName, ctx.version, owner);
 }
 
 export type PublishCliContext = {

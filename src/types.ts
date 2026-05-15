@@ -58,6 +58,7 @@ export interface OrbitRegistryClient {
   getPlugin(pluginId: Hex): Promise<OrbitPlugin>;
   isRegistered(pluginId: Hex): Promise<boolean>;
   getPluginsByOwner(owner: Address): Promise<Hex[]>;
+  getSignerAddress(): Promise<Address>;
 }
 
 export interface OrbitBillingClient {

@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { parseDotEnv } from "../src/runtime_config.js";
+import { describe, it, expect, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { parseDotEnv, upsertDotEnvKeys } from "../src/runtime_config.js";
 
 describe("parseDotEnv", () => {
   it("parses basic KEY=value pairs", () => {
@@ -35,5 +38,49 @@ BETA=two
 
   it("skips lines without equals or empty key", () => {
     expect(parseDotEnv("noequals\n=noval\nOK=1")).toEqual({ OK: "1" });
+  });
+});
+
+describe("upsertDotEnvKeys", () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of dirs) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    dirs.length = 0;
+  });
+
+  it("creates .env with keys when missing", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-upsert-"));
+    dirs.push(dir);
+    const pluginId = `0x${"a".repeat(64)}`;
+    const envPath = upsertDotEnvKeys(dir, {
+      PLUGIN_KEY: pluginId,
+      ORBIT_PLUGIN_ID: pluginId,
+    });
+    expect(envPath).toBe(path.join(dir, ".env"));
+    expect(parseDotEnv(fs.readFileSync(envPath, "utf8"))).toEqual({
+      PLUGIN_KEY: pluginId,
+      ORBIT_PLUGIN_ID: pluginId,
+    });
+    expect(process.env.PLUGIN_KEY).toBe(pluginId);
+  });
+
+  it("updates existing keys and preserves other lines", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-upsert2-"));
+    dirs.push(dir);
+    const old = `0x${"b".repeat(64)}`;
+    const next = `0x${"c".repeat(64)}`;
+    fs.writeFileSync(
+      path.join(dir, ".env"),
+      `# plugin\nPRIVATE_KEY=0x1\nPLUGIN_KEY=${old}\nORBIT_PLUGIN_ID=${old}\n`,
+      "utf8",
+    );
+    upsertDotEnvKeys(dir, { PLUGIN_KEY: next, ORBIT_PLUGIN_ID: next });
+    const parsed = parseDotEnv(fs.readFileSync(path.join(dir, ".env"), "utf8"));
+    expect(parsed.PRIVATE_KEY).toBe("0x1");
+    expect(parsed.PLUGIN_KEY).toBe(next);
+    expect(parsed.ORBIT_PLUGIN_ID).toBe(next);
   });
 });
