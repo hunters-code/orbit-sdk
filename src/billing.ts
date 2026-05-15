@@ -1,6 +1,11 @@
-import { createPublicClient, createWalletClient, http, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { orbitBillingAbi, orbitRegistryAbi } from "./abis.js";
+import {
+  createChainTransport,
+  resolveRpcUrl,
+  waitForTransactionReceiptReliable,
+} from "./chain_tx.js";
 import { getEnvOrPrompt } from "./runtime_config.js";
 import type { BillingReceipt, OrbitBillingClient } from "./types.js";
 
@@ -14,7 +19,6 @@ type CreateOrbitBillingClientConfig = {
 };
 
 async function loadBillingConfig(): Promise<CreateOrbitBillingClientConfig> {
-  const rpcUrl = "https://evmrpc-testnet.0g.ai";
   const privateKey = (await getEnvOrPrompt({
     envKey: "PRIVATE_KEY",
     promptMessage: "Enter private key",
@@ -22,6 +26,7 @@ async function loadBillingConfig(): Promise<CreateOrbitBillingClientConfig> {
     validate: (value) =>
       value.startsWith("0x") && value.length === 66 ? true : "Expected 0x + 64 hex chars"
   })) as Hex;
+  const rpcUrl = resolveRpcUrl();
   const registryAddress: Address = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
   const billingAddress: Address = "0x34e3fea4cbd6604becc0a87ace8aa831b23f5314";
   const chainId = 16602;
@@ -42,15 +47,17 @@ export function createOrbitBillingClient(config: CreateOrbitBillingClientConfig)
   const account = privateKeyToAccount(config.privateKey);
   const chain = buildChain(config);
 
+  const transport = createChainTransport(config.rpcUrl);
+
   const walletClient = createWalletClient({
     account,
     chain,
-    transport: http(config.rpcUrl)
+    transport,
   });
 
   const publicClient = createPublicClient({
     chain,
-    transport: http(config.rpcUrl)
+    transport,
   });
 
   async function getInstallPrice(pluginId: Hex): Promise<bigint> {
@@ -84,7 +91,7 @@ export function createOrbitBillingClient(config: CreateOrbitBillingClientConfig)
         value
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
       return {
         txHash,
         blockNumber: receipt.blockNumber,
@@ -102,7 +109,7 @@ export function createOrbitBillingClient(config: CreateOrbitBillingClientConfig)
         value
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
       return {
         txHash,
         blockNumber: receipt.blockNumber,
@@ -118,7 +125,7 @@ export function createOrbitBillingClient(config: CreateOrbitBillingClientConfig)
         args: [pluginId]
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
       return {
         txHash,
         blockNumber: receipt.blockNumber

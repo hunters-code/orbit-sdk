@@ -2,7 +2,6 @@ import {
   createPublicClient,
   createWalletClient,
   encodeAbiParameters,
-  http,
   keccak256,
   parseAbiParameters,
   type Address,
@@ -10,6 +9,11 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { orbitRegistryAbi } from "./abis.js";
+import {
+  createChainTransport,
+  resolveRpcUrl,
+  waitForTransactionReceiptReliable,
+} from "./chain_tx.js";
 import { getEnvOrPrompt } from "./runtime_config.js";
 import type {
   OrbitPlugin,
@@ -29,7 +33,6 @@ type CreateOrbitRegistryClientConfig = {
 };
 
 async function loadRegistryConfig(): Promise<CreateOrbitRegistryClientConfig> {
-  const rpcUrl = "https://evmrpc-testnet.0g.ai";
   const privateKey = (await getEnvOrPrompt({
     envKey: "PRIVATE_KEY",
     promptMessage: "Enter private key",
@@ -37,6 +40,7 @@ async function loadRegistryConfig(): Promise<CreateOrbitRegistryClientConfig> {
     validate: (value) =>
       value.startsWith("0x") && value.length === 66 ? true : "Expected 0x + 64 hex chars"
   })) as Hex;
+  const rpcUrl = resolveRpcUrl();
   const registryAddress: Address = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
   const chainId = 16602;
   const chainName = "0G Galileo Testnet";
@@ -68,15 +72,17 @@ export function createOrbitRegistryClient(
   const account = privateKeyToAccount(config.privateKey);
   const chain = buildChain(config);
 
+  const transport = createChainTransport(config.rpcUrl);
+
   const walletClient = createWalletClient({
     account,
     chain,
-    transport: http(config.rpcUrl)
+    transport,
   });
 
   const publicClient = createPublicClient({
     chain,
-    transport: http(config.rpcUrl)
+    transport,
   });
 
   return {
@@ -95,7 +101,7 @@ export function createOrbitRegistryClient(
         ]
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
       const pluginId = computePluginId(input.name, input.version, account.address);
 
       return {
@@ -113,7 +119,7 @@ export function createOrbitRegistryClient(
         args: [input.pluginId, input.slug, input.description]
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
 
       return {
         txHash,
@@ -129,7 +135,7 @@ export function createOrbitRegistryClient(
         args: [pluginId]
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
 
       return {
         txHash,

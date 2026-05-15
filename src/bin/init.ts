@@ -165,7 +165,7 @@ export default definePluginEntry({
 });
 `;
 
-  const envExample = `ORBIT_RPC_URL=
+  const envExample = `ORBIT_RPC_URL=https://evmrpc-testnet.0g.ai
 ORBIT_CHAIN_ID=
 ORBIT_CHAIN_NAME=
 PRIVATE_KEY=
