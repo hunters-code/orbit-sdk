@@ -6,7 +6,7 @@ import {
   resolveRpcUrl,
   waitForTransactionReceiptReliable,
 } from "./chain_tx.js";
-import { getEnvOrPrompt } from "./runtime_config.js";
+import { getUserPrivateKey } from "./user_config.js";
 import type { BillingReceipt, OrbitBillingClient } from "./types.js";
 
 type CreateOrbitBillingClientConfig = {
@@ -19,13 +19,7 @@ type CreateOrbitBillingClientConfig = {
 };
 
 async function loadBillingConfig(): Promise<CreateOrbitBillingClientConfig> {
-  const privateKey = (await getEnvOrPrompt({
-    envKey: "PRIVATE_KEY",
-    promptMessage: "Enter private key",
-    secret: true,
-    validate: (value) =>
-      value.startsWith("0x") && value.length === 66 ? true : "Expected 0x + 64 hex chars"
-  })) as Hex;
+  const privateKey = getUserPrivateKey();
   const rpcUrl = resolveRpcUrl();
   const registryAddress: Address = "0xbd83d0ae87efc9a2571bf03a7f5bb1e1cdba1954";
   const billingAddress: Address = "0x34e3fea4cbd6604becc0a87ace8aa831b23f5314";

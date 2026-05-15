@@ -84,7 +84,7 @@ export function persistPluginKeyToEnv(cwd: string, pluginId: string): string {
   });
 }
 
-function applyCwdDotEnv(): void {
+export function applyCwdDotEnv(): void {
   if (cwdDotEnvApplied) return;
   cwdDotEnvApplied = true;
   const envPath = path.join(process.cwd(), ".env");

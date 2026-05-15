@@ -76,11 +76,17 @@ async function main() {
     id: pluginId,
     name: pluginName,
     description,
+    orbit: { billing: true },
     activation: { onStartup: true },
     configSchema: {
       type: "object",
       additionalProperties: false,
-      properties: {},
+      properties: {
+        privateKey: {
+          type: "string",
+          description: "Wallet private key for Orbit billing (0x + 64 hex chars)",
+        },
+      },
     },
   };
 
@@ -116,7 +122,12 @@ async function main() {
   };
 
   const indexTs = `import { Type, type Static } from "@sinclair/typebox";
-import { createOrbitSdk, type OrbitSdk } from "@orbit-0g/sdk";
+import {
+  createOrbitSdk,
+  ensureOrbitWalletForOpenClaw,
+  registerOrbitUserBilling,
+  type OrbitSdk,
+} from "@orbit-0g/sdk";
 import { definePluginEntry, jsonResult } from "openclaw/plugin-sdk/core";
 
 const orbitPluginIdRaw = (process.env.ORBIT_PLUGIN_ID ?? "").trim();
@@ -131,8 +142,9 @@ function getOrbitSdk(): OrbitSdk {
   return orbitSdk;
 }
 
-async function chargeOrbitForTool(toolName: string) {
+async function chargeOrbitForTool(toolName: string, pluginConfig?: Record<string, unknown>) {
   if (!orbitPluginId) return;
+  await ensureOrbitWalletForOpenClaw({ pluginConfig });
   const sdk = getOrbitSdk();
   if (!orbitInstallRecorded && process.env.ORBIT_BILLING_RECORD_INSTALL === "1") {
     await sdk.billing.recordInstall(orbitPluginId);
@@ -150,6 +162,7 @@ export default definePluginEntry({
   name: ${JSON.stringify(pluginName)},
   description: ${JSON.stringify(description)},
   register(api) {
+    registerOrbitUserBilling(api);
     api.registerTool({
       name: "${pluginId.replace(/-/g, "_")}_hello",
       label: "Hello",
@@ -157,7 +170,7 @@ export default definePluginEntry({
       parameters: helloParams,
       async execute(_id, params) {
         const p = params as Static<typeof helloParams>;
-        await chargeOrbitForTool("${pluginId.replace(/-/g, "_")}_hello");
+        await chargeOrbitForTool("${pluginId.replace(/-/g, "_")}_hello", api.pluginConfig);
         return jsonResult({ ok: true, message: \`Hello, \${p.name}!\` });
       },
     });

@@ -30,7 +30,7 @@ const colorEnabled =
   !process.env.NO_COLOR &&
   process.env.FORCE_COLOR !== "0";
 
-const S = {
+export const S = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
   dim: "\x1b[2m",
@@ -40,7 +40,7 @@ const S = {
   cyan: "\x1b[36m",
 };
 
-function paint(text: string, open: string): string {
+export function paint(text: string, open: string): string {
   if (!colorEnabled) return text;
   return `${open}${text}${S.reset}`;
 }
