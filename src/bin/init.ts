@@ -58,6 +58,7 @@ async function main() {
     scripts: {
       typecheck: "tsc --noEmit",
       publish: "orbit-publish",
+      update: "orbit-update",
     },
     openclaw: {
       extensions: ["./index.ts"],
@@ -195,6 +196,7 @@ dist/
     # edit .env with your credentials
     # edit index.ts to add your tools
     npm run publish
+    # later: npm run update (after PLUGIN_KEY is set)
 `);
 }
 

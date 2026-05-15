@@ -1,4 +1,5 @@
 export { createOrbitSdk } from "./sdk.js";
+export { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
 export { createOrbitRegistryClient, createRegistry } from "./registry.js";
 export { createOrbitBillingClient, createBilling } from "./billing.js";
 export { createStorage } from "./storage.js";

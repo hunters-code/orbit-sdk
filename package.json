@@ -21,14 +21,16 @@
   "types": "dist/index.d.ts",
   "bin": {
     "orbit-init": "dist/bin/init.js",
-    "orbit-publish": "dist/bin/publish.js"
+    "orbit-publish": "dist/bin/publish.js",
+    "orbit-update": "dist/bin/update.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "@inquirer/prompts": "latest",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^3.2.4"
   }
 }
