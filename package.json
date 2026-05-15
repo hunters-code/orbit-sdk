@@ -1,6 +1,6 @@
 {
   "name": "@orbit-0g/sdk",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Orbit SDK for registry and billing contracts",
   "keywords": [
     "Orbit",
