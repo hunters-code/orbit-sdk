@@ -95,14 +95,14 @@ async function buildPluginRuntime(cwd: string): Promise<void> {
 }
 
 function normalizeGitRemote(raw: string): string | null {
-  // Standard HTTPS: https://github.com/user/repo(.git)
-  const httpsMatch = raw.match(/^https:\/\/github\.com\/[^/]+\/[^/]+?(\.git)?$/);
-  if (httpsMatch) return raw.replace(/\.git$/, "");
+  // Standard HTTPS: https://github.com/user/repo(.git) → owner/repo
+  const httpsMatch = raw.match(/^https:\/\/github\.com\/([^/]+\/[^/]+?)(\.git)?$/);
+  if (httpsMatch) return httpsMatch[1];
 
-  // SSH (standard or alias): git@<host-containing-"github">:user/repo(.git)
+  // SSH (standard or alias): git@<host-containing-"github">:user/repo(.git) → owner/repo
   // Handles git@github.com:user/repo and aliases like git@github-personal:user/repo
   const sshMatch = raw.match(/^git@[^:]*github[^:]*:([^/]+\/[^/]+?)(\.git)?$/i);
-  if (sshMatch) return `https://github.com/${sshMatch[1]}`;
+  if (sshMatch) return sshMatch[1];
 
   return null;
 }
@@ -133,7 +133,7 @@ function buildPublishArgs(
   dryRun: boolean,
   cwd: string
 ): string[] {
-  const args = ["--yes", "clawhub", "package", "publish", target, "--family", family];
+  const args = ["openclaw", "hub", "publish", target, "--family", family];
   if (dryRun) args.push("--dry-run");
   const git = resolveGitInfo(cwd);
   if (git) {
