@@ -75,18 +75,28 @@ function readInstallManifest(event: unknown): unknown {
 }
 
 export async function ensureOrbitWalletForOpenClaw(
-  api?: Pick<OrbitOpenClawPluginApi, "pluginConfig">,
+  api?: Pick<OrbitOpenClawPluginApi, "pluginConfig" | "logger">,
 ): Promise<void> {
   applyPluginConfigPrivateKey(api?.pluginConfig);
   if (!hasUserPrivateKey()) {
-    orbitSdkLog("warn", "openclaw.wallet.missing", {
-      note: "Plugin tool path blocked until wallet configured; no billing tx sent.",
-    });
+    orbitSdkLog(
+      "warn",
+      "openclaw.wallet.missing",
+      {
+        note: "Plugin tool path blocked until wallet configured; no billing tx sent.",
+      },
+      api?.logger,
+    );
     throw new OrbitUserNotConfiguredError(WALLET_SETUP_HINT);
   }
-  orbitSdkLog("info", "openclaw.wallet.ok", {
-    note: "PRIVATE_KEY present; billing calls may proceed.",
-  });
+  orbitSdkLog(
+    "info",
+    "openclaw.wallet.ok",
+    {
+      note: "PRIVATE_KEY present; billing calls may proceed.",
+    },
+    api?.logger,
+  );
 }
 
 export function registerOrbitUserBilling(
@@ -129,11 +139,16 @@ export function registerOrbitUserBilling(
       "before_install",
       async (event) => {
         const manifest = readInstallManifest(event);
-        orbitSdkLog("info", "openclaw.hook.before_install", {
-          pluginId: api.id ?? "",
-          orbitBilledCandidate: String(isOrbitBilledPluginManifest(manifest)),
-          note: "SDK does not call OrbitRegistry on install; wallet prompt only for orbit-billed manifests.",
-        });
+        orbitSdkLog(
+          "info",
+          "openclaw.hook.before_install",
+          {
+            pluginId: api.id ?? "",
+            orbitBilledCandidate: String(isOrbitBilledPluginManifest(manifest)),
+            note: "SDK does not call OrbitRegistry on install; wallet prompt only for orbit-billed manifests.",
+          },
+          api.logger,
+        );
         if (!isOrbitBilledPluginManifest(manifest)) return;
         applyPluginConfigPrivateKey(api.pluginConfig);
         if (hasUserPrivateKey()) return;
@@ -155,10 +170,15 @@ export function registerOrbitUserBilling(
 
   if (promptOnGatewayStart) {
     api.on("gateway_start", async () => {
-      orbitSdkLog("info", "openclaw.hook.gateway_start", {
-        pluginId: api.id ?? "",
-        note: "SDK does not register plugins on chain here; OrbitRegistry is only used by orbit-publish.",
-      });
+      orbitSdkLog(
+        "info",
+        "openclaw.hook.gateway_start",
+        {
+          pluginId: api.id ?? "",
+          note: "SDK does not register plugins on chain here; OrbitRegistry is only used by orbit-publish.",
+        },
+        api.logger,
+      );
       const fromConfig = api.pluginConfig?.privateKey;
       if (typeof fromConfig === "string" && fromConfig.trim()) {
         persistUserPrivateKey(fromConfig);
@@ -177,18 +197,36 @@ export function registerOrbitUserBilling(
     });
   }
 
-  if (blockToolsWithoutWallet) {
-    api.on(
-      "before_tool_call",
-      async () => {
-        applyPluginConfigPrivateKey(api.pluginConfig);
-        if (hasUserPrivateKey()) return;
+  api.on(
+    "before_tool_call",
+    async (event) => {
+      const toolName =
+        event &&
+        typeof event === "object" &&
+        "toolName" in event &&
+        typeof (event as { toolName?: unknown }).toolName === "string"
+          ? (event as { toolName: string }).toolName
+          : "";
+      applyPluginConfigPrivateKey(api.pluginConfig);
+      orbitSdkLog(
+        "info",
+        "openclaw.hook.before_tool_call",
+        {
+          toolName,
+          pluginId: api.id ?? "",
+          hasWallet: String(hasUserPrivateKey()),
+          note: "billing.* logs appear only when your tool calls sdk.billing.recordUsage",
+        },
+        api.logger,
+      );
+      if (blockToolsWithoutWallet && !hasUserPrivateKey()) {
         return {
           block: true,
           blockReason: WALLET_SETUP_HINT,
         };
-      },
-      { priority: 100 },
-    );
-  }
+      }
+      return;
+    },
+    { priority: 100 },
+  );
 }

@@ -143,20 +143,24 @@ function getOrbitSdk(): OrbitSdk {
   return orbitSdk;
 }
 
-async function chargeOrbitForTool(toolName: string, pluginConfig?: Record<string, unknown>) {
+async function chargeOrbitForTool(
+  toolName: string,
+  pluginConfig?: Record<string, unknown>,
+  logger?: { info?: (msg: string) => void; warn?: (msg: string) => void; error?: (msg: string) => void },
+) {
   if (!orbitPluginId) {
-    orbitSdkLog("warn", "plugin.billing.skip", { reason: "ORBIT_PLUGIN_ID unset" });
+    orbitSdkLog("warn", "plugin.billing.skip", { reason: "ORBIT_PLUGIN_ID unset" }, logger);
     return;
   }
-  await ensureOrbitWalletForOpenClaw({ pluginConfig });
-  orbitSdkLog("info", "plugin.billing.charge.start", { toolName, orbitPluginId });
+  await ensureOrbitWalletForOpenClaw({ pluginConfig, logger });
+  orbitSdkLog("info", "plugin.billing.charge.start", { toolName, orbitPluginId }, logger);
   const sdk = getOrbitSdk();
   if (!orbitInstallRecorded && process.env.ORBIT_BILLING_RECORD_INSTALL === "1") {
     await sdk.billing.recordInstall(orbitPluginId);
     orbitInstallRecorded = true;
   }
   await sdk.billing.recordUsage(orbitPluginId, toolName);
-  orbitSdkLog("info", "plugin.billing.charge.done", { toolName, orbitPluginId });
+  orbitSdkLog("info", "plugin.billing.charge.done", { toolName, orbitPluginId }, logger);
 }
 
 const helloParams = Type.Object({
@@ -176,7 +180,7 @@ export default definePluginEntry({
       parameters: helloParams,
       async execute(_id, params) {
         const p = params as Static<typeof helloParams>;
-        await chargeOrbitForTool("${pluginId.replace(/-/g, "_")}_hello", api.pluginConfig);
+        await chargeOrbitForTool("${pluginId.replace(/-/g, "_")}_hello", api.pluginConfig, api.logger);
         return jsonResult({ ok: true, message: \`Hello, \${p.name}!\` });
       },
     });
