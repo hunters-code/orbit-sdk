@@ -128,7 +128,7 @@ npm run orbit:publish
 3. Calls `registerPlugin` or `updatePlugin` on `OrbitRegistry`
 4. Writes `PLUGIN_KEY` / `ORBIT_PLUGIN_ID` into the plugin `.env` and `orbit.pluginId` into `openclaw.plugin.json`
 
-Requires the **`clawhub`** CLI and auth (`clawhub login` or `CLAWHUB_TOKEN` / `OPENCLAW_CLAWHUB_TOKEN`).
+Requires the **`clawhub`** CLI and auth (`clawhub login` or `CLAWHUB_TOKEN` / `OPENCLAW_CLAWHUB_TOKEN`). The plugin folder must be a **git repo** with `origin` on GitHub (for `--source-repo` / `--source-commit`). Run publish from the plugin root (the SDK passes `--workdir` explicitly so ClawHub does not pick another workspace).
 
 After publish, verify on ClawHub:
 

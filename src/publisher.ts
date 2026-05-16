@@ -119,6 +119,17 @@ function resolveGitInfo(cwd: string): { repo: string; commit: string } | null {
   return null;
 }
 
+function assertPublishLayout(cwd: string): void {
+  const packageJsonPath = path.join(cwd, "package.json");
+  const manifestPath = path.join(cwd, "openclaw.plugin.json");
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error(`package.json required in ${cwd}`);
+  }
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(`openclaw.plugin.json required in ${cwd}`);
+  }
+}
+
 export function buildClawhubPublishArgs(
   cwd: string,
   options: {
@@ -129,16 +140,18 @@ export function buildClawhubPublishArgs(
   },
 ): string[] {
   const ctx = loadPublishCliContext(cwd);
-  const resolvedSource = path.resolve(options.sourceDir);
   const resolvedCwd = path.resolve(cwd);
-  const sourceArg = resolvedSource === resolvedCwd ? "." : resolvedSource;
+  const resolvedSource = path.resolve(options.sourceDir);
+  assertPublishLayout(resolvedSource);
 
   const args = [
     "--yes",
     "clawhub",
     "package",
     "publish",
-    sourceArg,
+    resolvedSource,
+    "--workdir",
+    resolvedCwd,
     "--family",
     options.family,
     "--name",
@@ -151,9 +164,13 @@ export function buildClawhubPublishArgs(
 
   if (options.dryRun) args.push("--dry-run");
 
-  const git = resolveGitInfo(cwd);
+  const git = resolveGitInfo(resolvedCwd);
   if (git) {
     args.push("--source-repo", git.repo, "--source-commit", git.commit);
+  } else if (options.family === "code-plugin") {
+    throw new Error(
+      "code-plugin publish requires a git repo with origin on GitHub (--source-repo and --source-commit)",
+    );
   }
 
   if (options.extraArgs?.length) args.push(...options.extraArgs);

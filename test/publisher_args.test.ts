@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -27,6 +28,15 @@ describe("buildClawhubPublishArgs", () => {
       }),
       "utf8",
     );
+    execSync("git init", { cwd: tmpDir });
+    execSync("git remote add origin https://github.com/hunters-code/echo-plugin.git", {
+      cwd: tmpDir,
+    });
+    fs.writeFileSync(path.join(tmpDir, "README.md"), "# test\n", "utf8");
+    execSync("git add -A", { cwd: tmpDir });
+    execSync('git -c user.email=test@test.com -c user.name=test commit -m "init"', {
+      cwd: tmpDir,
+    });
 
     const args = buildClawhubPublishArgs(tmpDir, {
       sourceDir: tmpDir,
@@ -35,7 +45,10 @@ describe("buildClawhubPublishArgs", () => {
     });
 
     expect(args[0]).toBe("--yes");
-    expect(args.slice(1, 5)).toEqual(["clawhub", "package", "publish", "."]);
+    expect(args.slice(1, 4)).toEqual(["clawhub", "package", "publish"]);
+    expect(args).toContain(tmpDir);
+    expect(args).toContain("--workdir");
+    expect(args).toContain(tmpDir);
     expect(args).toContain("--family");
     expect(args).toContain("code-plugin");
     expect(args).toContain("--name");
