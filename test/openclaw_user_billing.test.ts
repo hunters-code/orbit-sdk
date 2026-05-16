@@ -157,7 +157,7 @@ describe("registerOrbitUserBilling", () => {
       "translation_translate",
     );
     expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining("Orbit usage recorded"),
+      expect.stringContaining("Orbit billing: usage recorded"),
     );
   });
 
