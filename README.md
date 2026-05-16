@@ -40,30 +40,69 @@ Override RPC only if needed: `ORBIT_RPC_URL` or `RPC_URL`.
 
 ### 1. Scaffold a plugin
 
-From an empty directory:
+From an empty directory (interactive terminal required):
 
 ```bash
 npx orbit-init
 ```
 
-This creates (or **merges into existing**) `package.json`, `openclaw.plugin.json`, `.env.example`, `index.ts`, and TypeScript config. Re-running `orbit-init` is safe: it adds `orbit:publish`, `@orbit-0g/sdk`, and `orbit.billing` without overwriting your tool code.
+`orbit-init` runs a short Q&A, then creates or **merges** project files. Re-running is safe: it upgrades Orbit-related config without overwriting `index.ts` or your tool code.
 
-### 2. Set pricing
+| Prompt | Default | Notes |
+|--------|---------|--------|
+| Plugin ID (kebab-case) | folder name | Used as `package.json` name |
+| Plugin display name | Plugin ID | Shown in OpenClaw |
+| Description | `An Orbit plugin` | |
+| Author | *(empty)* | Optional |
+| Version | `0.1.0` | |
+| Price per install (ETH) | `0` or existing value | `0` = free |
+| Price per usage / tool call (ETH) | `0` or existing value | `0` = free |
 
-In `openclaw.plugin.json`:
+**Pricing input:** amounts are entered in **ETH** (e.g. `0`, `0.001`, `1.5`). Up to 18 decimal places. The CLI converts to wei and writes `pricePerInstallWei` / `pricePerUsageWei` in `openclaw.plugin.json`.
+
+| You enter (ETH) | Stored in manifest (wei) |
+|-----------------|---------------------------|
+| `0` | `"0"` |
+| `0.001` | `"1000000000000000"` |
+| `1` | `"1000000000000000000"` |
+
+Example session:
+
+```text
+  Orbit Plugin Init
+
+? Plugin ID (kebab-case): my-plugin
+? Plugin display name: My Plugin
+? Description: Does something useful
+? Author:
+? Version: 0.1.0
+
+  Pricing (ETH — 0 = free)
+
+? Price per install (ETH): 0.001
+? Price per usage / tool call (ETH): 0.001
+```
+
+Generated manifest (wei fields are what `orbit-publish` sends on-chain):
 
 ```json
 {
   "id": "my-plugin",
   "name": "My Plugin",
   "description": "Does something useful",
-  "orbit": { "billing": true },
   "pricePerInstallWei": "1000000000000000",
-  "pricePerUsageWei": "100000000000000"
+  "pricePerUsageWei": "1000000000000000",
+  "orbit": { "billing": true, "pluginId": "" },
+  "activation": { "onStartup": true }
 }
 ```
 
-Prices are in **wei**. Use `"0"` for free install or usage.
+After `npm run orbit:publish`, `orbit.pluginId` is filled with your on-chain plugin id (`0x` + 64 hex).
+
+### 2. Set or change pricing later
+
+- Run `npx orbit-init` again (defaults show current ETH values converted from wei), or
+- Edit `pricePerInstallWei` / `pricePerUsageWei` in `openclaw.plugin.json` directly (wei strings), then re-publish.
 
 ### 3. Configure creator wallet
 
@@ -73,7 +112,7 @@ Copy `.env.example` to `.env` and set your deployer/publisher key:
 PRIVATE_KEY=0x...
 ```
 
-`PLUGIN_KEY` and `ORBIT_PLUGIN_ID` are written automatically by `orbit-publish` after on-chain registration.
+`PLUGIN_KEY`, `ORBIT_PLUGIN_ID` (plugin `.env`), and `openclaw.plugin.json` → `orbit.pluginId` are written automatically by `orbit-publish` after on-chain registration.
 
 ### 4. Publish
 
@@ -87,7 +126,7 @@ npm run orbit:publish
 1. Builds the plugin (`tsc -p tsconfig.build.json`)
 2. Publishes to ClawHub (`clawhub package publish`)
 3. Calls `registerPlugin` or `updatePlugin` on `OrbitRegistry`
-4. Writes `PLUGIN_KEY` / `ORBIT_PLUGIN_ID` into `.env`
+4. Writes `PLUGIN_KEY` / `ORBIT_PLUGIN_ID` into the plugin `.env` and `orbit.pluginId` into `openclaw.plugin.json`
 
 Requires ClawHub auth (`clawhub login` or `CLAWHUB_TOKEN` / `OPENCLAW_CLAWHUB_TOKEN`).
 
@@ -103,7 +142,7 @@ End users need a wallet with testnet funds. Two ways to configure:
 openclaw orbit wallet setup
 ```
 
-Stores `PRIVATE_KEY` in `~/.orbit/.env`.
+Stores **only** `PRIVATE_KEY` in `~/.orbit/.env` (shared wallet for all plugins). Plugin ids are **not** stored here.
 
 **Standalone CLI**
 
@@ -126,41 +165,38 @@ When the plugin uses `registerOrbitUserBilling`, each tool call sends `recordUsa
 Minimal plugin entry:
 
 ```ts
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
-  createOrbitSdk,
+  readOrbitPluginIdFromManifest,
   registerOrbitUserBilling,
-  type OrbitSdk,
 } from "@orbit-0g/sdk";
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 
-const orbitPluginId = (process.env.ORBIT_PLUGIN_ID ?? process.env.PLUGIN_KEY ?? "").trim() as `0x${string}` | "";
-let orbitSdk: OrbitSdk | null = null;
-
-function getOrbitSdk(): OrbitSdk {
-  if (!orbitSdk) orbitSdk = createOrbitSdk();
-  return orbitSdk;
-}
+const pluginRoot = path.dirname(fileURLToPath(import.meta.url));
+const orbitBillingPluginId = readOrbitPluginIdFromManifest(
+  path.join(pluginRoot, "openclaw.plugin.json"),
+);
 
 export default definePluginEntry({
   id: "my-plugin",
   register(api) {
     registerOrbitUserBilling(api, {
-      pluginId: orbitPluginId || undefined,
+      pluginId: orbitBillingPluginId ?? undefined,
     });
 
     api.registerTool({
       name: "my_tool",
       // ...
       async execute(_id, params) {
-        if (orbitPluginId) {
-          await getOrbitSdk().billing.recordUsage(orbitPluginId, "my_tool");
-        }
         return { ok: true };
       },
     });
   },
 });
 ```
+
+`registerOrbitUserBilling` charges usage in `before_tool_call` — you do not need a separate `recordUsage` call in each tool.
 
 `registerOrbitUserBilling` registers:
 
@@ -169,20 +205,25 @@ export default definePluginEntry({
 - `before_install` — optional install billing for manifests with `orbit.billing: true`
 - `gateway_start` — prompt for wallet if missing
 
-### On-chain plugin ID
+### On-chain plugin ID (per plugin)
 
-Billing uses the **registry plugin id** (`0x` + 64 hex), not the OpenClaw plugin id string.
+Billing uses the **registry plugin id** (`0x` + 64 hex), not the OpenClaw plugin id string. Each installed plugin must use **its own** id so multi-plugin gateways do not cross-charge.
 
-Set one of:
+Resolved in order:
 
-- `ORBIT_PLUGIN_ID` or `PLUGIN_KEY` in `.env` (written by `orbit-publish`)
-- `registerOrbitUserBilling(api, { pluginId: "0x..." })`
+1. `registerOrbitUserBilling(api, { pluginId: "0x..." })`
+2. `openclaw.plugin.json` → `orbit.pluginId` (written by `orbit-publish`; read via `readOrbitPluginIdFromManifest`)
+3. `api.pluginConfig.orbitPluginId` / `pluginConfig.orbit.pluginId`
+
+Global `process.env.ORBIT_PLUGIN_ID` is **not** used for user billing (avoids conflicts when multiple plugins are loaded).
 
 ### Manifest
 
 ```json
 {
-  "orbit": { "billing": true },
+  "orbit": { "billing": true, "pluginId": "0x..." },
+  "pricePerInstallWei": "1000000000000000",
+  "pricePerUsageWei": "1000000000000000",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -209,14 +250,16 @@ const sdk = createOrbitSdk();
 
 ### Registry (creator)
 
+Prices in the API are **bigint wei** (`0.001` ETH = `1_000_000_000_000_000n`):
+
 ```ts
 const receipt = await sdk.registry.registerPlugin({
   name: "my-plugin",
   version: "1.0.0",
   slug: "my-plugin",
   description: "My plugin",
-  pricePerInstall: 1_000_000_000_000_000n,
-  pricePerUsage: 100_000_000_000_000n,
+  pricePerInstall: 1_000_000_000_000_000n, // 0.001 ETH
+  pricePerUsage: 1_000_000_000_000_000n,
 });
 
 await sdk.registry.updatePlugin({
@@ -297,11 +340,13 @@ const registry = createOrbitRegistryClient({
 
 You do **not** need `ORBIT_REGISTRY_ADDRESS`, `ORBIT_BILLING_ADDRESS`, `ORBIT_CHAIN_ID`, `ORBIT_CHAIN_NAME`, or `ORBIT_RPC_URL` in plugin `.env` — the SDK defaults these for Galileo testnet.
 
-### End user — `~/.orbit/.env`
+### End user — `~/.orbit/.env` (wallet only)
 
 | Variable | Description |
 |----------|-------------|
-| `PRIVATE_KEY` | User wallet for usage billing |
+| `PRIVATE_KEY` | User wallet for usage billing (shared across plugins) |
+
+Do **not** put `ORBIT_PLUGIN_ID`, `PLUGIN_KEY`, or other plugin-specific values in this file — they would break billing when multiple plugins are installed.
 
 Override config directory: `ORBIT_USER_CONFIG_DIR`.
 
@@ -336,7 +381,7 @@ sequenceDiagram
     CLI->>Registry: updatePlugin(metadata)
   end
   Registry-->>CLI: tx confirmed
-  CLI-->>Creator: PLUGIN_KEY in .env
+  CLI-->>Creator: PLUGIN_KEY + orbit.pluginId
 ```
 
 ### User: tool call billing

@@ -190,15 +190,40 @@ describe("registerOrbitUserBilling", () => {
     });
   });
 
-  it("resolves pluginId from ORBIT_PLUGIN_ID env", async () => {
+  it("ignores global ORBIT_PLUGIN_ID env when options.pluginId is unset", async () => {
     const samplePk = `0x${"a".repeat(64)}`;
     process.env.PRIVATE_KEY = samplePk;
     process.env.ORBIT_PLUGIN_ID = `0x${"c".repeat(64)}`;
 
     const on = vi.fn();
     const registerCli = vi.fn();
+    const api = { pluginConfig: {}, on, registerCli };
+
+    registerOrbitUserBilling(api);
+
+    const beforeTool = on.mock.calls.find(([name]) => name === "before_tool_call")?.[1] as
+      | ((event?: unknown) => Promise<unknown>)
+      | undefined;
+
+    await beforeTool?.({ toolName: "test_tool" });
+
+    const billing = getMockBilling();
+    expect(billing.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it("resolves pluginId from pluginConfig.orbitPluginId", async () => {
+    const samplePk = `0x${"a".repeat(64)}`;
+    process.env.PRIVATE_KEY = samplePk;
+
+    const on = vi.fn();
+    const registerCli = vi.fn();
     const logger = { info: vi.fn(), warn: vi.fn() };
-    const api = { pluginConfig: {}, on, registerCli, logger };
+    const api = {
+      pluginConfig: { orbitPluginId: `0x${"c".repeat(64)}` },
+      on,
+      registerCli,
+      logger,
+    };
 
     registerOrbitUserBilling(api);
 

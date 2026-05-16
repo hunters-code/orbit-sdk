@@ -2,9 +2,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Hex } from "viem";
-import { applyCwdDotEnv, parseDotEnv, upsertDotEnvKeys } from "./runtime_config.js";
+import { applyCwdDotEnv, parseDotEnv } from "./runtime_config.js";
 
 let userDotEnvApplied = false;
+
+const USER_ENV_KEYS = new Set(["PRIVATE_KEY"]);
+
+const PLUGIN_SCOPED_ENV_KEYS = new Set([
+  "PLUGIN_KEY",
+  "ORBIT_PLUGIN_ID",
+  "OPENCLAW_PLUGIN_KEY",
+  "ORBIT_BILLING_RECORD_INSTALL",
+]);
 
 export class OrbitUserNotConfiguredError extends Error {
   constructor(
@@ -50,6 +59,7 @@ export function applyUserDotEnv(): void {
   }
   const parsed = parseDotEnv(raw);
   for (const [key, val] of Object.entries(parsed)) {
+    if (!USER_ENV_KEYS.has(key)) continue;
     process.env[key] = val;
   }
 }
@@ -88,16 +98,28 @@ export async function ensureOrbitUserReady(): Promise<Hex> {
   return getUserPrivateKey();
 }
 
+function formatUserEnvLine(key: string, value: string): string {
+  if (/[\s#"']/.test(value)) {
+    return `${key}="${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return `${key}=${value}`;
+}
+
 export function persistUserPrivateKey(privateKey: string): string {
   const dir = resolveUserConfigDir();
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const envPath = upsertDotEnvKeys(dir, { PRIVATE_KEY: privateKey.trim() });
+  const envPath = resolveUserEnvPath();
+  const trimmed = privateKey.trim();
+  fs.writeFileSync(envPath, `${formatUserEnvLine("PRIVATE_KEY", trimmed)}\n`, "utf8");
   fs.chmodSync(envPath, 0o600);
   try {
     fs.chmodSync(dir, 0o700);
   } catch {
   }
-  process.env.PRIVATE_KEY = privateKey.trim();
+  for (const key of PLUGIN_SCOPED_ENV_KEYS) {
+    delete process.env[key];
+  }
+  process.env.PRIVATE_KEY = trimmed;
   resetUserDotEnvCache();
   applyUserDotEnv();
   return envPath;

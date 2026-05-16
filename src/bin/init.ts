@@ -27,6 +27,77 @@ async function prompt(message: string, defaultValue?: string): Promise<string> {
   return value.trim();
 }
 
+const WEI_PER_ETH = 10n ** 18n;
+
+function validateEthAmount(raw: string): true | string {
+  const v = raw.trim() === "" ? "0" : raw.trim();
+  if (!/^\d+(\.\d+)?$/.test(v)) {
+    return "Enter a non-negative number in ETH (e.g. 0, 0.001, 1.5)";
+  }
+  const [whole, frac = ""] = v.split(".");
+  if (frac.length > 18) return "At most 18 decimal places";
+  try {
+    const wholePart = BigInt(whole || "0") * WEI_PER_ETH;
+    const fracPadded = frac.padEnd(18, "0").slice(0, 18);
+    const fracPart = BigInt(fracPadded || "0");
+    if (wholePart + fracPart < 0n) return "Amount must be non-negative";
+  } catch {
+    return "Invalid amount";
+  }
+  return true;
+}
+
+function ethToWei(eth: string): string {
+  const v = eth.trim() === "" ? "0" : eth.trim();
+  if (v === "0" || v === "0.0") return "0";
+  const [whole, frac = ""] = v.split(".");
+  const wholePart = BigInt(whole || "0") * WEI_PER_ETH;
+  const fracPadded = frac.padEnd(18, "0").slice(0, 18);
+  const fracPart = BigInt(fracPadded || "0");
+  return (wholePart + fracPart).toString();
+}
+
+function weiToEth(wei: string): string {
+  const w = BigInt((wei.trim() === "" ? "0" : wei.trim()) || "0");
+  if (w === 0n) return "0";
+  const whole = w / WEI_PER_ETH;
+  const frac = w % WEI_PER_ETH;
+  const fracStr = frac.toString().padStart(18, "0").replace(/0+$/, "");
+  if (!fracStr) return whole.toString();
+  return `${whole}.${fracStr}`;
+}
+
+async function promptEth(message: string, defaultValue = "0"): Promise<string> {
+  const value = await input({
+    message,
+    default: defaultValue,
+    validate: validateEthAmount,
+  });
+  const trimmed = value.trim();
+  return trimmed === "" ? "0" : trimmed;
+}
+
+function readExistingManifestPricing(): { installEth: string; usageEth: string } {
+  const manifestPath = path.join(cwd, "openclaw.plugin.json");
+  if (!fs.existsSync(manifestPath)) {
+    return { installEth: "0", usageEth: "0" };
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const installWei = String(manifest.pricePerInstallWei ?? manifest.priceWei ?? "0");
+    const usageWei = String(manifest.pricePerUsageWei ?? "0");
+    return {
+      installEth: weiToEth(installWei),
+      usageEth: weiToEth(usageWei),
+    };
+  } catch {
+    return { installEth: "0", usageEth: "0" };
+  }
+}
+
 function writeIfMissing(filePath: string, content: string): void {
   if (fs.existsSync(filePath)) {
     console.log(`  skip  ${path.relative(cwd, filePath)} (already exists)`);
@@ -125,6 +196,9 @@ function mergeOpenclawPluginJson(
       ? { ...(existing.orbit as Record<string, unknown>) }
       : {};
   orbit.billing = true;
+  if (typeof orbit.pluginId !== "string") {
+    orbit.pluginId = "";
+  }
   merged.orbit = orbit;
 
   if (!merged.activation) {
@@ -149,6 +223,13 @@ function mergeOpenclawPluginJson(
       privateKey: existingProps.privateKey ?? templateProps.privateKey,
     },
   };
+
+  if (template.pricePerInstallWei !== undefined) {
+    merged.pricePerInstallWei = template.pricePerInstallWei;
+  }
+  if (template.pricePerUsageWei !== undefined) {
+    merged.pricePerUsageWei = template.pricePerUsageWei;
+  }
 
   const changed = JSON.stringify(merged) !== JSON.stringify(existing);
   return { value: merged, changed };
@@ -239,6 +320,19 @@ async function main() {
   const author = await prompt("Author:", "");
   const version = await prompt("Version:", "0.1.0");
 
+  const existingPricing = readExistingManifestPricing();
+  console.log("\n  Pricing (ETH — 0 = free)\n");
+  const pricePerInstallEth = await promptEth(
+    "Price per install (ETH):",
+    existingPricing.installEth,
+  );
+  const pricePerUsageEth = await promptEth(
+    "Price per usage / tool call (ETH):",
+    existingPricing.usageEth,
+  );
+  const pricePerInstallWei = ethToWei(pricePerInstallEth);
+  const pricePerUsageWei = ethToWei(pricePerUsageEth);
+
   console.log("");
 
   const packageJson = {
@@ -283,7 +377,9 @@ async function main() {
     id: pluginId,
     name: pluginName,
     description,
-    orbit: { billing: true },
+    pricePerInstallWei,
+    pricePerUsageWei,
+    orbit: { billing: true, pluginId: "" },
     activation: { onStartup: true },
     configSchema: {
       type: "object",
@@ -328,47 +424,19 @@ async function main() {
     include: ["index.ts", "src/**/*.ts"],
   };
 
-  const indexTs = `import { Type, type Static } from "@sinclair/typebox";
+  const indexTs = `import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Type, type Static } from "@sinclair/typebox";
 import {
-  createOrbitSdk,
-  ensureOrbitWalletForOpenClaw,
-  orbitSdkLog,
+  readOrbitPluginIdFromManifest,
   registerOrbitUserBilling,
-  type OrbitSdk,
 } from "@orbit-0g/sdk";
 import { definePluginEntry, jsonResult } from "openclaw/plugin-sdk/core";
 
-const orbitPluginIdRaw = (process.env.ORBIT_PLUGIN_ID ?? "").trim();
-const orbitPluginId = orbitPluginIdRaw ? (orbitPluginIdRaw as \`0x\${string}\`) : null;
-let orbitSdk: OrbitSdk | null = null;
-let orbitInstallRecorded = false;
-
-function getOrbitSdk(): OrbitSdk {
-  if (!orbitSdk) {
-    orbitSdk = createOrbitSdk();
-  }
-  return orbitSdk;
-}
-
-async function chargeOrbitForTool(
-  toolName: string,
-  pluginConfig?: Record<string, unknown>,
-  logger?: { info?: (msg: string) => void; warn?: (msg: string) => void; error?: (msg: string) => void },
-) {
-  if (!orbitPluginId) {
-    orbitSdkLog("warn", "plugin.billing.skip", { reason: "ORBIT_PLUGIN_ID unset" }, logger);
-    return;
-  }
-  await ensureOrbitWalletForOpenClaw({ pluginConfig, logger });
-  orbitSdkLog("info", "plugin.billing.charge.start", { toolName, orbitPluginId }, logger);
-  const sdk = getOrbitSdk();
-  if (!orbitInstallRecorded && process.env.ORBIT_BILLING_RECORD_INSTALL === "1") {
-    await sdk.billing.recordInstall(orbitPluginId);
-    orbitInstallRecorded = true;
-  }
-  await sdk.billing.recordUsage(orbitPluginId, toolName);
-  orbitSdkLog("info", "plugin.billing.charge.done", { toolName, orbitPluginId }, logger);
-}
+const pluginRoot = path.dirname(fileURLToPath(import.meta.url));
+const orbitBillingPluginId = readOrbitPluginIdFromManifest(
+  path.join(pluginRoot, "openclaw.plugin.json"),
+);
 
 const helloParams = Type.Object({
   name: Type.String({ description: "Name to greet" }),
@@ -379,7 +447,9 @@ export default definePluginEntry({
   name: ${JSON.stringify(pluginName)},
   description: ${JSON.stringify(description)},
   register(api) {
-    registerOrbitUserBilling(api);
+    registerOrbitUserBilling(api, {
+      pluginId: orbitBillingPluginId ?? undefined,
+    });
     api.registerTool({
       name: "${pluginId.replace(/-/g, "_")}_hello",
       label: "Hello",
@@ -387,7 +457,6 @@ export default definePluginEntry({
       parameters: helloParams,
       async execute(_id, params) {
         const p = params as Static<typeof helloParams>;
-        await chargeOrbitForTool("${pluginId.replace(/-/g, "_")}_hello", api.pluginConfig, api.logger);
         return jsonResult({ ok: true, message: \`Hello, \${p.name}!\` });
       },
     });

@@ -3,7 +3,7 @@
 import { orbitSdkLog } from "../orbit_log.js";
 import { createPublisher } from "../publisher.js";
 import { createRegistry } from "../registry.js";
-import { persistPluginKeyToEnv } from "../runtime_config.js";
+import { persistPluginKeyToEnv, persistPluginKeyToManifest } from "../runtime_config.js";
 import {
   loadPublishCliContext,
   reportPublishCliFailure,
@@ -65,6 +65,7 @@ async function main() {
       description: ctx.description,
     });
     const envPath = persistPluginKeyToEnv(cwd, pluginId);
+    persistPluginKeyToManifest(cwd, pluginId);
     console.log(
       JSON.stringify(
         {
@@ -94,6 +95,7 @@ async function main() {
     pricePerUsage: ctx.pricePerUsage,
   });
   const envPath = persistPluginKeyToEnv(cwd, result.pluginId);
+  persistPluginKeyToManifest(cwd, result.pluginId);
   console.log(
     JSON.stringify(
       {

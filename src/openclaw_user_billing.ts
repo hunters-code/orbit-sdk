@@ -1,6 +1,10 @@
 import { orbitSdkLog } from "./orbit_log.js";
 import type { Hex } from "viem";
 import { createBilling } from "./billing.js";
+import {
+  parseOrbitPluginIdHex,
+  readOrbitPluginIdFromPluginConfig,
+} from "./plugin_id.js";
 import type { OrbitBillingClient } from "./types.js";
 import {
   OrbitUserNotConfiguredError,
@@ -56,7 +60,7 @@ const WALLET_SETUP_HINT =
   "Run: openclaw orbit wallet setup — required before using paid Orbit plugins.";
 
 const MISSING_ORBIT_PLUGIN_ID_NOTE =
-  "No Orbit on-chain plugin id: set ORBIT_PLUGIN_ID or PLUGIN_KEY (0x + 64 hex from orbit-publish .env) or registerOrbitUserBilling(api, { pluginId }). OpenClaw plugin id is not used for billing.";
+  "No Orbit on-chain plugin id for this plugin: run npm run orbit:publish (writes openclaw.plugin.json orbit.pluginId) or registerOrbitUserBilling(api, { pluginId }). Global ~/.orbit/.env is wallet-only.";
 
 function isOrbitBilledPluginManifest(manifest: unknown): boolean {
   if (!manifest || typeof manifest !== "object") return false;
@@ -105,16 +109,14 @@ export async function ensureOrbitWalletForOpenClaw(
   );
 }
 
-function resolvePluginId(options: RegisterOrbitUserBillingOptions): Hex | null {
-  const fromOpt = (options.pluginId ?? "").trim();
-  if (fromOpt) return fromOpt as Hex;
-  const fromEnv = (
-    process.env.ORBIT_PLUGIN_ID ??
-    process.env.PLUGIN_KEY ??
-    ""
-  ).trim();
-  if (fromEnv) return fromEnv as Hex;
-  return null;
+function resolveBillingPluginId(
+  api: OrbitOpenClawPluginApi,
+  options: RegisterOrbitUserBillingOptions,
+): Hex | null {
+  return (
+    parseOrbitPluginIdHex(options.pluginId) ??
+    readOrbitPluginIdFromPluginConfig(api.pluginConfig)
+  );
 }
 
 function readToolName(event: unknown): string {
@@ -133,6 +135,8 @@ export function registerOrbitUserBilling(
     blockToolsWithoutWallet = true,
     hookOrbitPluginInstalls = true,
   } = options;
+
+  const billingPluginId = resolveBillingPluginId(api, options);
 
   let billing: OrbitBillingClient | null = null;
 
@@ -200,10 +204,9 @@ export function registerOrbitUserBilling(
         }
 
         hasUserPrivateKey();
-        const installPluginId = resolvePluginId(options);
-        if (installPluginId) {
+        if (billingPluginId) {
           try {
-            const receipt = await getBilling().recordInstall(installPluginId);
+            const receipt = await getBilling().recordInstall(billingPluginId);
             api.logger?.info(
               `Orbit install recorded — tx: ${receipt.txHash}, charged: ${receipt.chargedWei} wei`,
             );
@@ -264,21 +267,20 @@ export function registerOrbitUserBilling(
             : "";
         applyPluginConfigPrivateKey(api.pluginConfig);
         const walletReady = hasUserPrivateKey();
-        const usagePluginId = resolvePluginId(options);
         orbitSdkLog(
           "info",
           "openclaw.hook.before_tool_call",
           {
             toolName,
             openclawPluginId: api.id ?? "",
-            orbitBillingPluginId: usagePluginId ?? "",
+            orbitBillingPluginId: billingPluginId ?? "",
             hasWallet: String(walletReady),
             note: "orbitBillingPluginId must be set or billing txs are skipped.",
           },
           api.logger,
         );
         api.logger?.info(
-          `Orbit billing check — tool=${toolName || "(unknown)"} openclawId=${api.id ?? ""} onChainId=${usagePluginId ?? "(none)"} wallet=${walletReady ? "yes" : "no"}`,
+          `Orbit billing check — tool=${toolName || "(unknown)"} openclawId=${api.id ?? ""} onChainId=${billingPluginId ?? "(none)"} wallet=${walletReady ? "yes" : "no"}`,
         );
         if (!walletReady) {
           api.logger?.info(
@@ -290,7 +292,7 @@ export function registerOrbitUserBilling(
           };
         }
 
-        if (!usagePluginId) {
+        if (!billingPluginId) {
           orbitSdkLog(
             "warn",
             "openclaw.billing.skipped.no_orbit_plugin_id",
@@ -309,11 +311,11 @@ export function registerOrbitUserBilling(
 
         const resolvedToolName = readToolName(event);
         api.logger?.info(
-          `Orbit billing: sending recordUsage on-chain — pluginId=${usagePluginId} tool=${resolvedToolName}`,
+          `Orbit billing: sending recordUsage on-chain — pluginId=${billingPluginId} tool=${resolvedToolName}`,
         );
         try {
           const receipt = await getBilling().recordUsage(
-            usagePluginId,
+            billingPluginId,
             resolvedToolName,
           );
           api.logger?.info(

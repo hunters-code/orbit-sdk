@@ -52,4 +52,35 @@ describe("user_config", () => {
     resetUserDotEnvCache();
     expect(() => getUserPrivateKey()).toThrow(OrbitUserNotConfiguredError);
   });
+
+  it("applyUserDotEnv loads only PRIVATE_KEY from user config", () => {
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-usercfg4-"));
+    process.env.ORBIT_USER_CONFIG_DIR = configDir;
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(configDir, ".env"),
+      `PRIVATE_KEY=${samplePk}\nORBIT_PLUGIN_ID=0x${"f".repeat(64)}\n`,
+      "utf8",
+    );
+    delete process.env.PRIVATE_KEY;
+    delete process.env.ORBIT_PLUGIN_ID;
+    resetUserDotEnvCache();
+    expect(hasUserPrivateKey()).toBe(true);
+    expect(process.env.ORBIT_PLUGIN_ID).toBeUndefined();
+  });
+
+  it("persistUserPrivateKey rewrites user env without plugin-scoped keys", () => {
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-usercfg5-"));
+    process.env.ORBIT_USER_CONFIG_DIR = configDir;
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(configDir, ".env"),
+      `PRIVATE_KEY=${samplePk}\nORBIT_PLUGIN_ID=0x${"e".repeat(64)}\n`,
+      "utf8",
+    );
+    persistUserPrivateKey(samplePk);
+    const raw = fs.readFileSync(path.join(configDir, ".env"), "utf8");
+    expect(raw).toContain("PRIVATE_KEY=");
+    expect(raw).not.toContain("ORBIT_PLUGIN_ID");
+  });
 });

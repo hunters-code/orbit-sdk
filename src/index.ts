@@ -1,7 +1,16 @@
 export type { OrbitPluginLogger } from "./orbit_log.js";
 export { orbitSdkLog } from "./orbit_log.js";
 export { createOrbitSdk } from "./sdk.js";
-export { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
+export {
+  getAnyEnvOrPrompt,
+  getEnvOrPrompt,
+  persistPluginKeyToManifest,
+} from "./runtime_config.js";
+export {
+  parseOrbitPluginIdHex,
+  readOrbitPluginIdFromManifest,
+  readOrbitPluginIdFromPluginConfig,
+} from "./plugin_id.js";
 export {
   OrbitUserNotConfiguredError,
   applyPluginConfigPrivateKey,

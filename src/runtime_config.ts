@@ -84,6 +84,23 @@ export function persistPluginKeyToEnv(cwd: string, pluginId: string): string {
   });
 }
 
+export function persistPluginKeyToManifest(cwd: string, pluginId: string): void {
+  const manifestPath = path.join(cwd, "openclaw.plugin.json");
+  if (!fs.existsSync(manifestPath)) return;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  const orbit =
+    manifest.orbit && typeof manifest.orbit === "object"
+      ? { ...(manifest.orbit as Record<string, unknown>) }
+      : {};
+  orbit.billing = true;
+  orbit.pluginId = pluginId;
+  manifest.orbit = orbit;
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8");
+}
+
 export function applyCwdDotEnv(): void {
   if (cwdDotEnvApplied) return;
   cwdDotEnvApplied = true;
