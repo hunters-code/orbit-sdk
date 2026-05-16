@@ -11,6 +11,24 @@ import {
 } from "./cli_common.js";
 
 async function main() {
+  // Prevent orbit-publish from running during `openclaw plugins install` or
+  // any npm lifecycle hook (publish, preinstall, postinstall, etc.).
+  // npm sets npm_lifecycle_event to the script name being executed.
+  const lifecycleEvent = process.env.npm_lifecycle_event ?? "";
+  const lifecycleScript = process.env.npm_lifecycle_script ?? "";
+  const isNpmLifecycle = Boolean(lifecycleEvent && lifecycleEvent !== "orbit:publish");
+  const isOpenClawInstall = Boolean(
+    process.env.OPENCLAW_INSTALLING ??
+    process.env.OPENCLAW_INSTALL_CONTEXT,
+  );
+  if (isNpmLifecycle || isOpenClawInstall) {
+    console.error(
+      `[orbit-publish] Skipped: detected npm lifecycle event "${lifecycleEvent}" (script: "${lifecycleScript}"). ` +
+      `Run "npm run orbit:publish" explicitly to publish and register.`,
+    );
+    process.exit(0);
+  }
+
   const cwd = process.cwd();
   const publishArgs = process.argv.slice(2);
   const publisher = createPublisher();

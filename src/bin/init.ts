@@ -57,7 +57,7 @@ async function main() {
     },
     scripts: {
       typecheck: "tsc --noEmit",
-      publish: "orbit-publish",
+      "orbit:publish": "orbit-publish",
     },
     openclaw: {
       extensions: ["./index.ts"],
@@ -218,7 +218,7 @@ dist/
     npm install
     # edit .env with your credentials
     # edit index.ts to add your tools
-    npm run publish
+    npm run orbit:publish
 `);
 }
 
