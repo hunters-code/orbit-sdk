@@ -94,9 +94,24 @@ async function buildPluginRuntime(cwd: string): Promise<void> {
   });
 }
 
+function normalizeGitRemote(raw: string): string | null {
+  // Standard HTTPS: https://github.com/user/repo(.git)
+  const httpsMatch = raw.match(/^https:\/\/github\.com\/[^/]+\/[^/]+?(\.git)?$/);
+  if (httpsMatch) return raw.replace(/\.git$/, "");
+
+  // SSH (standard or alias): git@<host-containing-"github">:user/repo(.git)
+  // Handles git@github.com:user/repo and aliases like git@github-personal:user/repo
+  const sshMatch = raw.match(/^git@[^:]*github[^:]*:([^/]+\/[^/]+?)(\.git)?$/i);
+  if (sshMatch) return `https://github.com/${sshMatch[1]}`;
+
+  return null;
+}
+
 function resolveGitInfo(cwd: string): { repo: string; commit: string } | null {
   try {
-    const repo = execSync("git remote get-url origin", { cwd, encoding: "utf8" }).trim();
+    const raw = execSync("git remote get-url origin", { cwd, encoding: "utf8" }).trim();
+    const repo = normalizeGitRemote(raw);
+    if (!repo) return null;
     const commit = execSync("git rev-parse HEAD", { cwd, encoding: "utf8" }).trim();
     if (repo && commit) return { repo, commit };
   } catch {}
