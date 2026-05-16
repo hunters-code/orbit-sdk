@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import * as userConfig from "../src/user_config.js";
 import { registerOrbitUserBilling } from "../src/openclaw_user_billing.js";
 
@@ -209,6 +212,40 @@ describe("registerOrbitUserBilling", () => {
 
     const billing = getMockBilling();
     expect(billing.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it("resolves pluginId from api.rootDir openclaw.plugin.json", async () => {
+    const samplePk = `0x${"a".repeat(64)}`;
+    process.env.PRIVATE_KEY = samplePk;
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "orbit-rootdir-"));
+    fs.writeFileSync(
+      path.join(tmpDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        orbit: { billing: true, pluginId: `0x${"d".repeat(64)}` },
+      }),
+      "utf8",
+    );
+
+    const on = vi.fn();
+    const registerCli = vi.fn();
+    const api = { rootDir: tmpDir, pluginConfig: {}, on, registerCli };
+
+    registerOrbitUserBilling(api);
+
+    const beforeTool = on.mock.calls.find(([name]) => name === "before_tool_call")?.[1] as
+      | ((event?: unknown) => Promise<unknown>)
+      | undefined;
+
+    await beforeTool?.({ toolName: "echo_message" });
+
+    const billing = getMockBilling();
+    expect(billing.recordUsage).toHaveBeenCalledWith(
+      `0x${"d".repeat(64)}`,
+      "echo_message",
+    );
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("resolves pluginId from pluginConfig.orbitPluginId", async () => {

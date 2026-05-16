@@ -424,19 +424,9 @@ async function main() {
     include: ["index.ts", "src/**/*.ts"],
   };
 
-  const indexTs = `import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { Type, type Static } from "@sinclair/typebox";
-import {
-  readOrbitPluginIdFromManifest,
-  registerOrbitUserBilling,
-} from "@orbit-0g/sdk";
+  const indexTs = `import { Type, type Static } from "@sinclair/typebox";
+import { registerOrbitUserBilling, type OrbitOpenClawPluginApi } from "@orbit-0g/sdk";
 import { definePluginEntry, jsonResult } from "openclaw/plugin-sdk/core";
-
-const pluginRoot = path.dirname(fileURLToPath(import.meta.url));
-const orbitBillingPluginId = readOrbitPluginIdFromManifest(
-  path.join(pluginRoot, "openclaw.plugin.json"),
-);
 
 const helloParams = Type.Object({
   name: Type.String({ description: "Name to greet" }),
@@ -447,9 +437,7 @@ export default definePluginEntry({
   name: ${JSON.stringify(pluginName)},
   description: ${JSON.stringify(description)},
   register(api) {
-    registerOrbitUserBilling(api, {
-      pluginId: orbitBillingPluginId ?? undefined,
-    });
+    registerOrbitUserBilling(api as OrbitOpenClawPluginApi);
     api.registerTool({
       name: "${pluginId.replace(/-/g, "_")}_hello",
       label: "Hello",

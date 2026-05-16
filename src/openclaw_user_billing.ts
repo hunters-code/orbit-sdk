@@ -1,8 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { orbitSdkLog } from "./orbit_log.js";
 import type { Hex } from "viem";
 import { createBilling } from "./billing.js";
 import {
   parseOrbitPluginIdHex,
+  readOrbitPluginIdFromManifest,
   readOrbitPluginIdFromPluginConfig,
 } from "./plugin_id.js";
 import type { OrbitBillingClient } from "./types.js";
@@ -16,6 +19,8 @@ import { runOrbitUserWalletSetup } from "./user_wallet_setup.js";
 
 export type OrbitOpenClawPluginApi = {
   id?: string;
+  rootDir?: string;
+  source?: string;
   pluginConfig?: Record<string, unknown>;
   registrationMode?: string;
   logger?: {
@@ -51,6 +56,7 @@ type CliDescriptor = {
 
 export type RegisterOrbitUserBillingOptions = {
   pluginId?: string;
+  manifestPath?: string;
   promptOnGatewayStart?: boolean;
   blockToolsWithoutWallet?: boolean;
   hookOrbitPluginInstalls?: boolean;
@@ -60,7 +66,7 @@ const WALLET_SETUP_HINT =
   "Run: openclaw orbit wallet setup — required before using paid Orbit plugins.";
 
 const MISSING_ORBIT_PLUGIN_ID_NOTE =
-  "No Orbit on-chain plugin id for this plugin: run npm run orbit:publish (writes openclaw.plugin.json orbit.pluginId) or registerOrbitUserBilling(api, { pluginId }). Global ~/.orbit/.env is wallet-only.";
+  "No Orbit on-chain plugin id: set orbit.pluginId in openclaw.plugin.json (npm run orbit:publish) or registerOrbitUserBilling(api, { pluginId }). Global ~/.orbit/.env is wallet-only.";
 
 function isOrbitBilledPluginManifest(manifest: unknown): boolean {
   if (!manifest || typeof manifest !== "object") return false;
@@ -109,14 +115,42 @@ export async function ensureOrbitWalletForOpenClaw(
   );
 }
 
+function readOrbitPluginIdFromRootDir(rootDir: string): Hex | null {
+  const candidates = [
+    path.join(rootDir, "openclaw.plugin.json"),
+    path.join(rootDir, "dist", "openclaw.plugin.json"),
+  ];
+  for (const manifestPath of candidates) {
+    if (!fs.existsSync(manifestPath)) continue;
+    const pluginId = readOrbitPluginIdFromManifest(manifestPath);
+    if (pluginId) return pluginId;
+  }
+  return null;
+}
+
 function resolveBillingPluginId(
   api: OrbitOpenClawPluginApi,
   options: RegisterOrbitUserBillingOptions,
 ): Hex | null {
-  return (
-    parseOrbitPluginIdHex(options.pluginId) ??
-    readOrbitPluginIdFromPluginConfig(api.pluginConfig)
-  );
+  const fromOpt = parseOrbitPluginIdHex(options.pluginId);
+  if (fromOpt) return fromOpt;
+
+  const fromConfig = readOrbitPluginIdFromPluginConfig(api.pluginConfig);
+  if (fromConfig) return fromConfig;
+
+  if (options.manifestPath?.trim()) {
+    const fromExplicitManifest = readOrbitPluginIdFromManifest(
+      path.resolve(options.manifestPath.trim()),
+    );
+    if (fromExplicitManifest) return fromExplicitManifest;
+  }
+
+  if (api.rootDir?.trim()) {
+    const fromRoot = readOrbitPluginIdFromRootDir(path.resolve(api.rootDir.trim()));
+    if (fromRoot) return fromRoot;
+  }
+
+  return null;
 }
 
 function readToolName(event: unknown): string {

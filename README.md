@@ -171,25 +171,13 @@ When the plugin uses `registerOrbitUserBilling`, each tool call sends `recordUsa
 Minimal plugin entry:
 
 ```ts
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  readOrbitPluginIdFromManifest,
-  registerOrbitUserBilling,
-} from "@orbit-0g/sdk";
+import { registerOrbitUserBilling, type OrbitOpenClawPluginApi } from "@orbit-0g/sdk";
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
-
-const pluginRoot = path.dirname(fileURLToPath(import.meta.url));
-const orbitBillingPluginId = readOrbitPluginIdFromManifest(
-  path.join(pluginRoot, "openclaw.plugin.json"),
-);
 
 export default definePluginEntry({
   id: "my-plugin",
   register(api) {
-    registerOrbitUserBilling(api, {
-      pluginId: orbitBillingPluginId ?? undefined,
-    });
+    registerOrbitUserBilling(api as OrbitOpenClawPluginApi);
 
     api.registerTool({
       name: "my_tool",
@@ -218,8 +206,14 @@ Billing uses the **registry plugin id** (`0x` + 64 hex), not the OpenClaw plugin
 Resolved in order:
 
 1. `registerOrbitUserBilling(api, { pluginId: "0x..." })`
-2. `openclaw.plugin.json` → `orbit.pluginId` (written by `orbit-publish`; read via `readOrbitPluginIdFromManifest`)
-3. `api.pluginConfig.orbitPluginId` / `pluginConfig.orbit.pluginId`
+2. `api.pluginConfig.orbitPluginId` / `pluginConfig.orbit.pluginId`
+3. `api.rootDir` → reads `openclaw.plugin.json` or `dist/openclaw.plugin.json` for `orbit.pluginId` (set by `orbit-publish`)
+
+So a typical plugin only needs:
+
+```ts
+registerOrbitUserBilling(api);
+```
 
 Global `process.env.ORBIT_PLUGIN_ID` is **not** used for user billing (avoids conflicts when multiple plugins are loaded).
 
