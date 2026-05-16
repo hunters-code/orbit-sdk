@@ -29,9 +29,11 @@ describe("createOrbitSdk", () => {
     expect(sdk.billing).toBeDefined();
   });
 
-  it("throws when privateKey and PRIVATE_KEY are missing", () => {
+  it("throws when privateKey and PRIVATE_KEY are missing on property access", () => {
     delete process.env.PRIVATE_KEY;
-    expect(() => createOrbitSdk({} as CreateOrbitSdkConfig)).toThrow(/Missing PRIVATE_KEY/);
+    const sdk = createOrbitSdk({} as CreateOrbitSdkConfig);
+    expect(() => sdk.registry).toThrow(/Missing PRIVATE_KEY/);
+    expect(() => sdk.billing).toThrow(/Missing PRIVATE_KEY/);
   });
 
   it("returns lazy registry and billing when config is nullish", () => {

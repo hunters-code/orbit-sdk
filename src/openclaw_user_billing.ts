@@ -1,4 +1,7 @@
 import { orbitSdkLog } from "./orbit_log.js";
+import type { Hex } from "viem";
+import { createBilling } from "./billing.js";
+import type { OrbitBillingClient } from "./types.js";
 import {
   OrbitUserNotConfiguredError,
   applyPluginConfigPrivateKey,
@@ -99,6 +102,25 @@ export async function ensureOrbitWalletForOpenClaw(
   );
 }
 
+function resolvePluginId(options: RegisterOrbitUserBillingOptions): Hex | null {
+  const fromOpt = (options.pluginId ?? "").trim();
+  if (fromOpt) return fromOpt as Hex;
+  const fromEnv = (
+    process.env.ORBIT_PLUGIN_ID ??
+    process.env.PLUGIN_KEY ??
+    ""
+  ).trim();
+  if (fromEnv) return fromEnv as Hex;
+  return null;
+}
+
+function readToolName(event: unknown): string {
+  if (!event || typeof event !== "object") return "unknown";
+  const record = event as Record<string, unknown>;
+  const name = record.toolName ?? record.tool ?? record.name;
+  return typeof name === "string" && name ? name : "unknown";
+}
+
 export function registerOrbitUserBilling(
   api: OrbitOpenClawPluginApi,
   options: RegisterOrbitUserBillingOptions = {},
@@ -108,6 +130,16 @@ export function registerOrbitUserBilling(
     blockToolsWithoutWallet = true,
     hookOrbitPluginInstalls = true,
   } = options;
+
+  const pluginId = resolvePluginId(options);
+  let billing: OrbitBillingClient | null = null;
+
+  function getBilling(): OrbitBillingClient {
+    if (!billing) {
+      billing = createBilling();
+    }
+    return billing;
+  }
 
   api.registerCli(
     ({ program }) => {
@@ -151,17 +183,34 @@ export function registerOrbitUserBilling(
         );
         if (!isOrbitBilledPluginManifest(manifest)) return;
         applyPluginConfigPrivateKey(api.pluginConfig);
-        if (hasUserPrivateKey()) return;
-        try {
-          const envPath = await runOrbitUserWalletSetup();
-          api.logger?.info(`Orbit wallet configured at ${envPath}`);
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "Orbit wallet setup failed";
-          return {
-            block: true,
-            blockReason: `${message} ${WALLET_SETUP_HINT}`,
-          };
+        if (!hasUserPrivateKey()) {
+          try {
+            const envPath = await runOrbitUserWalletSetup();
+            api.logger?.info(`Orbit wallet configured at ${envPath}`);
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Orbit wallet setup failed";
+            return {
+              block: true,
+              blockReason: `${message} ${WALLET_SETUP_HINT}`,
+            };
+          }
+        }
+
+        if (pluginId) {
+          try {
+            const receipt = await getBilling().recordInstall(pluginId);
+            api.logger?.info(
+              `Orbit install recorded — tx: ${receipt.txHash}, charged: ${receipt.chargedWei} wei`,
+            );
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Orbit billing failed";
+            return {
+              block: true,
+              blockReason: `Install billing failed: ${message}`,
+            };
+          }
         }
       },
       { priority: 100 },
@@ -197,36 +246,54 @@ export function registerOrbitUserBilling(
     });
   }
 
-  api.on(
-    "before_tool_call",
-    async (event) => {
-      const toolName =
-        event &&
-        typeof event === "object" &&
-        "toolName" in event &&
-        typeof (event as { toolName?: unknown }).toolName === "string"
-          ? (event as { toolName: string }).toolName
-          : "";
-      applyPluginConfigPrivateKey(api.pluginConfig);
-      orbitSdkLog(
-        "info",
-        "openclaw.hook.before_tool_call",
-        {
-          toolName,
-          pluginId: api.id ?? "",
-          hasWallet: String(hasUserPrivateKey()),
-          note: "billing.* logs appear only when your tool calls sdk.billing.recordUsage",
-        },
-        api.logger,
-      );
-      if (blockToolsWithoutWallet && !hasUserPrivateKey()) {
-        return {
-          block: true,
-          blockReason: WALLET_SETUP_HINT,
-        };
-      }
-      return;
-    },
-    { priority: 100 },
-  );
+  if (blockToolsWithoutWallet) {
+    api.on(
+      "before_tool_call",
+      async (event, ctx) => {
+        const toolName =
+          event &&
+            typeof event === "object" &&
+            "toolName" in event &&
+            typeof (event as { toolName?: unknown }).toolName === "string"
+            ? (event as { toolName: string }).toolName
+            : "";
+        applyPluginConfigPrivateKey(api.pluginConfig);
+        orbitSdkLog(
+          "info",
+          "openclaw.hook.before_tool_call",
+          {
+            toolName,
+            pluginId: api.id ?? "",
+            hasWallet: String(hasUserPrivateKey()),
+            note: "billing.* logs appear only when your tool calls sdk.billing.recordUsage",
+          },
+          api.logger,
+        );
+        if (!hasUserPrivateKey()) {
+          return {
+            block: true,
+            blockReason: WALLET_SETUP_HINT,
+          };
+        }
+
+        if (pluginId) {
+          const toolName = readToolName(event);
+          try {
+            const receipt = await getBilling().recordUsage(pluginId, toolName);
+            api.logger?.info(
+              `Orbit usage recorded — tool: ${toolName}, tx: ${receipt.txHash}, charged: ${receipt.chargedWei} wei`,
+            );
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : "Orbit billing failed";
+            return {
+              block: true,
+              blockReason: `Usage billing failed: ${message}`,
+            };
+          }
+        }
+      },
+      { priority: 100 },
+    );
+  }
 }
