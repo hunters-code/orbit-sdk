@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { orbitSdkLog } from "../orbit_log.js";
 import { createPublisher } from "../publisher.js";
 import { createRegistry } from "../registry.js";
 import { persistPluginKeyToEnv } from "../runtime_config.js";
@@ -15,14 +16,29 @@ async function main() {
   const publisher = createPublisher();
   const registry = createRegistry();
 
+  orbitSdkLog("info", "publish.orbit-publish.start", {
+    note: "This CLI is for creators only; openclaw plugins install never runs this.",
+    cwd,
+  });
+
   await publisher.publish({
     cwd,
     extraArgs: publishArgs.length > 0 ? publishArgs : undefined,
   });
 
+  orbitSdkLog("info", "publish.clawhub.done", {
+    note: "ClawHub package publish finished; next step is on-chain registry only if orbit-publish continues.",
+  });
+
   const ctx = loadPublishCliContext(cwd);
   const pluginId = await resolveRegistryPluginId(registry, ctx);
   const registered = await registry.isRegistered(pluginId);
+
+  orbitSdkLog("info", "publish.registry.probe", {
+    pluginId,
+    registered: String(registered),
+    note: registered ? "Will call updatePlugin on OrbitRegistry" : "Will call registerPlugin on OrbitRegistry",
+  });
 
   if (registered) {
     const result = await registry.updatePlugin({

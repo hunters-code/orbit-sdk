@@ -1,8 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import * as userConfig from "../src/user_config.js";
 import { registerOrbitUserBilling } from "../src/openclaw_user_billing.js";
 
 describe("registerOrbitUserBilling", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("registers cli, hooks, and blocks tools without wallet", async () => {
+    vi.spyOn(userConfig, "hasUserPrivateKey").mockReturnValue(false);
     const on = vi.fn();
     const registerCli = vi.fn();
     const api = {

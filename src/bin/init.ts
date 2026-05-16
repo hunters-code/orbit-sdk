@@ -125,6 +125,7 @@ async function main() {
 import {
   createOrbitSdk,
   ensureOrbitWalletForOpenClaw,
+  orbitSdkLog,
   registerOrbitUserBilling,
   type OrbitSdk,
 } from "@orbit-0g/sdk";
@@ -137,20 +138,25 @@ let orbitInstallRecorded = false;
 
 function getOrbitSdk(): OrbitSdk {
   if (!orbitSdk) {
-    orbitSdk = createOrbitSdk({});
+    orbitSdk = createOrbitSdk();
   }
   return orbitSdk;
 }
 
 async function chargeOrbitForTool(toolName: string, pluginConfig?: Record<string, unknown>) {
-  if (!orbitPluginId) return;
+  if (!orbitPluginId) {
+    orbitSdkLog("warn", "plugin.billing.skip", { reason: "ORBIT_PLUGIN_ID unset" });
+    return;
+  }
   await ensureOrbitWalletForOpenClaw({ pluginConfig });
+  orbitSdkLog("info", "plugin.billing.charge.start", { toolName, orbitPluginId });
   const sdk = getOrbitSdk();
   if (!orbitInstallRecorded && process.env.ORBIT_BILLING_RECORD_INSTALL === "1") {
     await sdk.billing.recordInstall(orbitPluginId);
     orbitInstallRecorded = true;
   }
   await sdk.billing.recordUsage(orbitPluginId, toolName);
+  orbitSdkLog("info", "plugin.billing.charge.done", { toolName, orbitPluginId });
 }
 
 const helloParams = Type.Object({

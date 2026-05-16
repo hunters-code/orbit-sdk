@@ -14,6 +14,7 @@ import {
   resolveRpcUrl,
   waitForTransactionReceiptReliable,
 } from "./chain_tx.js";
+import { orbitSdkLog } from "./orbit_log.js";
 import { getEnvOrPrompt } from "./runtime_config.js";
 import type {
   OrbitPlugin,
@@ -87,6 +88,14 @@ export function createOrbitRegistryClient(
 
   return {
     async registerPlugin(input: RegisterPluginInput): Promise<RegisterPluginReceipt> {
+      orbitSdkLog("info", "registry.registerPlugin.start", {
+        contract: "OrbitRegistry",
+        functionName: "registerPlugin",
+        registryAddress: config.registryAddress,
+        name: input.name,
+        version: input.version,
+        slug: input.slug,
+      });
       const txHash = await walletClient.writeContract({
         address: config.registryAddress,
         abi: orbitRegistryAbi,
@@ -104,6 +113,11 @@ export function createOrbitRegistryClient(
       const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
       const pluginId = computePluginId(input.name, input.version, account.address);
 
+      orbitSdkLog("info", "registry.registerPlugin.done", {
+        pluginId,
+        txHash,
+        blockNumber: receipt.blockNumber.toString(),
+      });
       return {
         txHash,
         blockNumber: receipt.blockNumber,
@@ -112,6 +126,13 @@ export function createOrbitRegistryClient(
     },
 
     async updatePlugin(input: UpdatePluginInput): Promise<UpdatePluginReceipt> {
+      orbitSdkLog("info", "registry.updatePlugin.start", {
+        contract: "OrbitRegistry",
+        functionName: "updatePlugin",
+        registryAddress: config.registryAddress,
+        pluginId: input.pluginId,
+        slug: input.slug,
+      });
       const txHash = await walletClient.writeContract({
         address: config.registryAddress,
         abi: orbitRegistryAbi,
@@ -121,6 +142,11 @@ export function createOrbitRegistryClient(
 
       const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
 
+      orbitSdkLog("info", "registry.updatePlugin.done", {
+        pluginId: input.pluginId,
+        txHash,
+        blockNumber: receipt.blockNumber.toString(),
+      });
       return {
         txHash,
         blockNumber: receipt.blockNumber
@@ -128,6 +154,12 @@ export function createOrbitRegistryClient(
     },
 
     async deactivatePlugin(pluginId: Hex) {
+      orbitSdkLog("info", "registry.deactivatePlugin.start", {
+        contract: "OrbitRegistry",
+        functionName: "deactivatePlugin",
+        registryAddress: config.registryAddress,
+        pluginId,
+      });
       const txHash = await walletClient.writeContract({
         address: config.registryAddress,
         abi: orbitRegistryAbi,
@@ -137,6 +169,11 @@ export function createOrbitRegistryClient(
 
       const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
 
+      orbitSdkLog("info", "registry.deactivatePlugin.done", {
+        pluginId,
+        txHash,
+        blockNumber: receipt.blockNumber.toString(),
+      });
       return {
         txHash,
         blockNumber: receipt.blockNumber

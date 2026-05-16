@@ -1,3 +1,4 @@
+import { orbitSdkLog } from "./orbit_log.js";
 import {
   OrbitUserNotConfiguredError,
   applyPluginConfigPrivateKey,
@@ -78,8 +79,14 @@ export async function ensureOrbitWalletForOpenClaw(
 ): Promise<void> {
   applyPluginConfigPrivateKey(api?.pluginConfig);
   if (!hasUserPrivateKey()) {
+    orbitSdkLog("warn", "openclaw.wallet.missing", {
+      note: "Plugin tool path blocked until wallet configured; no billing tx sent.",
+    });
     throw new OrbitUserNotConfiguredError(WALLET_SETUP_HINT);
   }
+  orbitSdkLog("info", "openclaw.wallet.ok", {
+    note: "PRIVATE_KEY present; billing calls may proceed.",
+  });
 }
 
 export function registerOrbitUserBilling(
@@ -122,6 +129,11 @@ export function registerOrbitUserBilling(
       "before_install",
       async (event) => {
         const manifest = readInstallManifest(event);
+        orbitSdkLog("info", "openclaw.hook.before_install", {
+          pluginId: api.id ?? "",
+          orbitBilledCandidate: String(isOrbitBilledPluginManifest(manifest)),
+          note: "SDK does not call OrbitRegistry on install; wallet prompt only for orbit-billed manifests.",
+        });
         if (!isOrbitBilledPluginManifest(manifest)) return;
         applyPluginConfigPrivateKey(api.pluginConfig);
         if (hasUserPrivateKey()) return;
@@ -143,6 +155,10 @@ export function registerOrbitUserBilling(
 
   if (promptOnGatewayStart) {
     api.on("gateway_start", async () => {
+      orbitSdkLog("info", "openclaw.hook.gateway_start", {
+        pluginId: api.id ?? "",
+        note: "SDK does not register plugins on chain here; OrbitRegistry is only used by orbit-publish.",
+      });
       const fromConfig = api.pluginConfig?.privateKey;
       if (typeof fromConfig === "string" && fromConfig.trim()) {
         persistUserPrivateKey(fromConfig);

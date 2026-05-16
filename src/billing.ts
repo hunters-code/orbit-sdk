@@ -6,6 +6,7 @@ import {
   resolveRpcUrl,
   waitForTransactionReceiptReliable,
 } from "./chain_tx.js";
+import { orbitSdkLog } from "./orbit_log.js";
 import { getUserPrivateKey } from "./user_config.js";
 import type { BillingReceipt, OrbitBillingClient } from "./types.js";
 
@@ -76,39 +77,91 @@ export function createOrbitBillingClient(config: CreateOrbitBillingClientConfig)
 
   return {
     async recordInstall(pluginId: Hex): Promise<BillingReceipt> {
-      const value = await getInstallPrice(pluginId);
-      const txHash = await walletClient.writeContract({
-        address: config.billingAddress,
-        abi: orbitBillingAbi,
+      orbitSdkLog("info", "billing.recordInstall.start", {
+        contract: "OrbitBilling",
         functionName: "recordInstall",
-        args: [pluginId],
-        value
+        pluginId,
+        billingAddress: config.billingAddress,
       });
+      try {
+        const value = await getInstallPrice(pluginId);
+        orbitSdkLog("info", "billing.recordInstall.pricing", {
+          pluginId,
+          valueWei: value.toString(),
+        });
+        const txHash = await walletClient.writeContract({
+          address: config.billingAddress,
+          abi: orbitBillingAbi,
+          functionName: "recordInstall",
+          args: [pluginId],
+          value
+        });
 
-      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
-      return {
-        txHash,
-        blockNumber: receipt.blockNumber,
-        chargedWei: value
-      };
+        const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
+        orbitSdkLog("info", "billing.recordInstall.done", {
+          pluginId,
+          txHash,
+          blockNumber: receipt.blockNumber.toString(),
+          chargedWei: value.toString(),
+        });
+        return {
+          txHash,
+          blockNumber: receipt.blockNumber,
+          chargedWei: value
+        };
+      } catch (err) {
+        orbitSdkLog("error", "billing.recordInstall.failed", {
+          pluginId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
     },
 
     async recordUsage(pluginId: Hex, toolName: string): Promise<BillingReceipt> {
-      const value = await getUsagePrice(pluginId);
-      const txHash = await walletClient.writeContract({
-        address: config.billingAddress,
-        abi: orbitBillingAbi,
+      orbitSdkLog("info", "billing.recordUsage.start", {
+        contract: "OrbitBilling",
         functionName: "recordUsage",
-        args: [pluginId, toolName],
-        value
+        pluginId,
+        toolName,
+        billingAddress: config.billingAddress,
       });
+      try {
+        const value = await getUsagePrice(pluginId);
+        orbitSdkLog("info", "billing.recordUsage.pricing", {
+          pluginId,
+          toolName,
+          valueWei: value.toString(),
+        });
+        const txHash = await walletClient.writeContract({
+          address: config.billingAddress,
+          abi: orbitBillingAbi,
+          functionName: "recordUsage",
+          args: [pluginId, toolName],
+          value
+        });
 
-      const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
-      return {
-        txHash,
-        blockNumber: receipt.blockNumber,
-        chargedWei: value
-      };
+        const receipt = await waitForTransactionReceiptReliable(publicClient, txHash);
+        orbitSdkLog("info", "billing.recordUsage.done", {
+          pluginId,
+          toolName,
+          txHash,
+          blockNumber: receipt.blockNumber.toString(),
+          chargedWei: value.toString(),
+        });
+        return {
+          txHash,
+          blockNumber: receipt.blockNumber,
+          chargedWei: value
+        };
+      } catch (err) {
+        orbitSdkLog("error", "billing.recordUsage.failed", {
+          pluginId,
+          toolName,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
     },
 
     async withdraw(pluginId: Hex) {

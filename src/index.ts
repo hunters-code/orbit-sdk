@@ -1,3 +1,4 @@
+export { orbitSdkLog } from "./orbit_log.js";
 export { createOrbitSdk } from "./sdk.js";
 export { getAnyEnvOrPrompt, getEnvOrPrompt } from "./runtime_config.js";
 export {
