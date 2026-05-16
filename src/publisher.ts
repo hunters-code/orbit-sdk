@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync, spawn } from "node:child_process";
+import { loadPublishCliContext } from "./publish_context.js";
 import type { OrbitPublisherClient, PublishOptions } from "./types.js";
 type PublishPhase = "dry-run" | "publish";
 
@@ -118,29 +119,44 @@ function resolveGitInfo(cwd: string): { repo: string; commit: string } | null {
   return null;
 }
 
-function resolveVersion(cwd: string): string {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8"));
-    return pkg.version || "0.0.0";
-  } catch {}
-  return "0.0.0";
-}
-
-function buildPublishArgs(
-  target: string,
-  family: "code-plugin" | "bundle-plugin",
-  extraArgs: string[] | undefined,
-  dryRun: boolean,
-  cwd: string
+export function buildClawhubPublishArgs(
+  cwd: string,
+  options: {
+    sourceDir: string;
+    family: "code-plugin" | "bundle-plugin";
+    extraArgs?: string[];
+    dryRun: boolean;
+  },
 ): string[] {
-  const args = ["openclaw", "hub", "publish", target, "--family", family];
-  if (dryRun) args.push("--dry-run");
+  const ctx = loadPublishCliContext(cwd);
+  const resolvedSource = path.resolve(options.sourceDir);
+  const resolvedCwd = path.resolve(cwd);
+  const sourceArg = resolvedSource === resolvedCwd ? "." : resolvedSource;
+
+  const args = [
+    "--yes",
+    "clawhub",
+    "package",
+    "publish",
+    sourceArg,
+    "--family",
+    options.family,
+    "--name",
+    ctx.slug,
+    "--display-name",
+    ctx.displayName,
+    "--version",
+    ctx.version,
+  ];
+
+  if (options.dryRun) args.push("--dry-run");
+
   const git = resolveGitInfo(cwd);
   if (git) {
     args.push("--source-repo", git.repo, "--source-commit", git.commit);
   }
-  args.push("--version", resolveVersion(cwd));
-  if (extraArgs?.length) args.push(...extraArgs);
+
+  if (options.extraArgs?.length) args.push(...options.extraArgs);
   return args;
 }
 
@@ -152,9 +168,18 @@ export function createPublisher(): OrbitPublisherClient {
       const family = options.family ?? "code-plugin";
       const extra = options.extraArgs;
 
+      const sourceDir = path.resolve(cwd, target);
       await buildPluginRuntime(cwd);
-      await runNpx(buildPublishArgs(path.resolve(cwd, target), family, extra, true, cwd), cwd, "dry-run");
-      await runNpx(buildPublishArgs(path.resolve(cwd, target), family, extra, false, cwd), cwd, "publish");
+      await runNpx(
+        buildClawhubPublishArgs(cwd, { sourceDir, family, extraArgs: extra, dryRun: true }),
+        cwd,
+        "dry-run",
+      );
+      await runNpx(
+        buildClawhubPublishArgs(cwd, { sourceDir, family, extraArgs: extra, dryRun: false }),
+        cwd,
+        "publish",
+      );
     }
   };
 }

@@ -124,11 +124,17 @@ npm run orbit:publish
 `orbit-publish`:
 
 1. Builds the plugin (`tsc -p tsconfig.build.json`)
-2. Publishes to ClawHub (`clawhub package publish`)
+2. Publishes to ClawHub via **`npx clawhub package publish .`** (not `openclaw hub publish`)
 3. Calls `registerPlugin` or `updatePlugin` on `OrbitRegistry`
 4. Writes `PLUGIN_KEY` / `ORBIT_PLUGIN_ID` into the plugin `.env` and `orbit.pluginId` into `openclaw.plugin.json`
 
-Requires ClawHub auth (`clawhub login` or `CLAWHUB_TOKEN` / `OPENCLAW_CLAWHUB_TOKEN`).
+Requires the **`clawhub`** CLI and auth (`clawhub login` or `CLAWHUB_TOKEN` / `OPENCLAW_CLAWHUB_TOKEN`).
+
+After publish, verify on ClawHub:
+
+```bash
+clawhub package inspect <plugin-name>
+```
 
 ---
 
@@ -369,11 +375,11 @@ Override config directory: `ORBIT_USER_CONFIG_DIR`.
 sequenceDiagram
   participant Creator
   participant CLI as orbit-publish
-  participant ClawHub
+  participant ClawHub as clawhub CLI
   participant Registry as OrbitRegistry
 
   Creator->>CLI: npm run orbit:publish
-  CLI->>ClawHub: package publish
+  CLI->>ClawHub: clawhub package publish .
   ClawHub-->>CLI: ok
   alt not registered
     CLI->>Registry: registerPlugin(prices)

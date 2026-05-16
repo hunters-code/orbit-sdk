@@ -45,7 +45,7 @@ async function main() {
   });
 
   orbitSdkLog("info", "publish.clawhub.done", {
-    note: "ClawHub package publish finished; next step is on-chain registry only if orbit-publish continues.",
+    note: "clawhub package publish finished (verify with: clawhub package inspect <name>). Next: on-chain registry.",
   });
 
   const ctx = loadPublishCliContext(cwd);
